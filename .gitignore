@@ -1,0 +1,65 @@
+# Local tooling, never committed
+CLAUDE.md
+CLAUDE.local.md
+SESSION_CONTEXT.md
+.claude/
+.serena/
+docs/superpowers/
+**/superpowers/
+*.profraw
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.superpowers/
+
+# From ha-carrier-template
+# Byte-compiled / optimized
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Packaging / build
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Test, coverage & type-check caches
+.pytest_cache/
+.mypy_cache/
+.dmypy.json
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.hypothesis/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environments & secrets
+.env
+
+# Editors / IDEs
+.vscode/
+*.code-workspace
+*.swp
+
+# OS
+.DS_Store
+
+# Claude Code (local)
+.claude/
+
+# Raw Allegro captures (contain secrets)
+captures/

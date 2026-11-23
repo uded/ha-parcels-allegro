@@ -1,0 +1,113 @@
+"""Allegro parcel tracker custom component for Home Assistant."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+import logging
+from typing import Any
+
+import aiohttp
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState
+from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
+from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+
+from .api import AllegroApiClient, AllegroApiError, AllegroAuthError
+from .const import DOMAIN, PLATFORMS
+from .contents import ContentsStore
+from .coordinator import AllegroCoordinator
+from .services import async_setup_services, async_unload_services
+
+_LOGGER = logging.getLogger(__name__)
+
+
+@dataclass
+class AllegroData:
+    """Runtime data attached to an Allegro config entry."""
+
+    client: AllegroApiClient
+    coordinator: AllegroCoordinator
+    account: dict[str, Any]
+    session: aiohttp.ClientSession
+
+
+type AllegroConfigEntry = ConfigEntry[AllegroData]
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: AllegroConfigEntry) -> bool:
+    """Set up Allegro from a config entry."""
+    # Each config entry needs its own cookie jar, or two accounts overwrite
+    # each other's auth cookies in the shared session. The connector is reused
+    # (connector_owner=False) so this stays cheap.
+    session = aiohttp.ClientSession(
+        connector=async_get_clientsession(hass).connector,
+        connector_owner=False,
+        cookie_jar=aiohttp.CookieJar(),
+    )
+    client = AllegroApiClient(
+        entry.data[CONF_EMAIL], entry.data[CONF_PASSWORD], session
+    )
+
+    try:
+        account = await client.async_login()
+    except AllegroAuthError as err:
+        # Credentials rejected — start reauth instead of retrying a password
+        # that will never work again.
+        await session.close()
+        raise ConfigEntryAuthFailed("Allegro authentication failed") from err
+    except (AllegroApiError, aiohttp.ClientError) as err:
+        # Non-auth failure (typically a 5xx outage) — retry with backoff.
+        await session.close()
+        raise ConfigEntryNotReady("Allegro login failed") from err
+
+    coordinator = AllegroCoordinator(hass, client, entry)
+    await coordinator.contents_store.async_load()
+
+    try:
+        # Fetch initial data here, before forwarding to platforms. Raising
+        # ConfigEntryNotReady from a forwarded platform is too late for HA to
+        # catch cleanly (it logs a warning and half-sets-up the entry); doing
+        # the first refresh here lets a transient failure fail the whole entry
+        # so HA retries it with backoff.
+        await coordinator.async_config_entry_first_refresh()
+    except Exception:
+        # Without this, every setup retry leaks a session.
+        await session.close()
+        raise
+
+    entry.runtime_data = AllegroData(
+        client=client, coordinator=coordinator, account=account, session=session
+    )
+
+    try:
+        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    except Exception:
+        await session.close()
+        raise
+
+    async_setup_services(hass)
+
+    # No entry.add_update_listener: the options flow is an
+    # OptionsFlowWithReload, which may not be combined with one.
+    return True
+
+
+async def async_unload_entry(hass: HomeAssistant, entry: AllegroConfigEntry) -> bool:
+    """Unload an Allegro config entry."""
+    if await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
+        await entry.runtime_data.session.close()
+        # The services are shared by every account, so they go with the last one.
+        if not any(
+            other.state is ConfigEntryState.LOADED
+            for other in hass.config_entries.async_entries(DOMAIN)
+            if other.entry_id != entry.entry_id
+        ):
+            async_unload_services(hass)
+        return True
+    return False
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: AllegroConfigEntry) -> None:
+    """Delete the contents the user set for the removed entry."""
+    await ContentsStore(hass, entry.entry_id).async_remove()

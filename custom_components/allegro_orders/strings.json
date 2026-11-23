@@ -1,0 +1,133 @@
+{
+  "title": "Allegro",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up Allegro",
+        "description": "Sign in with the account you use on the Allegro website or app. Your parcels are read from that account.",
+        "data": {
+          "email": "E-mail address",
+          "password": "Password"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Allegro sign-in expired",
+        "description": "Allegro no longer accepts the stored credentials. Enter them again for {account}.",
+        "data": {
+          "email": "E-mail address",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Allegro rejected these credentials.",
+      "cannot_connect": "Could not reach Allegro. Please try again."
+    },
+    "abort": {
+      "already_configured": "That Allegro account is already set up.",
+      "reauth_successful": "Allegro was reauthenticated successfully.",
+      "wrong_account": "Those credentials are for a different Allegro account. Sign in with the account this entry was set up for."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Allegro options",
+        "sections": {
+          "delivered": {
+            "name": "Delivered parcels",
+            "data": {
+              "delivered_filter_type": "Filter by",
+              "delivered_filter_amount": "Amount"
+            },
+            "data_description": {
+              "delivered_filter_type": "Show delivered parcels from the last X days, or limit to the X most recent.",
+              "delivered_filter_amount": "Number of days or parcels to show."
+            }
+          },
+          "history": {
+            "name": "Parcel history",
+            "data": {
+              "include_history": "Include status history"
+            },
+            "data_description": {
+              "include_history": "Add a per-parcel history attribute listing each status update (timestamp, status, original text). Off by default."
+            }
+          }
+        }
+      }
+    }
+  },
+  "selector": {
+    "delivered_filter_type": {
+      "options": {
+        "days": "Days",
+        "parcels": "Number of parcels"
+      }
+    }
+  },
+  "device_automation": {
+    "trigger_type": {
+      "parcel_registered": "A parcel was registered",
+      "parcel_status_changed": "A parcel's status changed",
+      "parcel_delivered": "A parcel was delivered",
+      "parcel_delivery_time_changed": "A parcel's expected delivery time changed"
+    }
+  },
+  "entity": {
+    "button": {
+      "refresh": {
+        "name": "Refresh"
+      }
+    },
+    "calendar": {
+      "deliveries": {
+        "name": "Deliveries"
+      }
+    },
+    "sensor": {
+      "incoming_parcels": {
+        "name": "Incoming parcels",
+        "unit_of_measurement": "parcels"
+      },
+      "next_delivery": {
+        "name": "Next delivery"
+      },
+      "delivered_parcels": {
+        "name": "Delivered parcels",
+        "unit_of_measurement": "parcels"
+      },
+      "last_update": {
+        "name": "Last successful update"
+      },
+      "parcel": {
+        "name": "Parcel {barcode}"
+      }
+    }
+  },
+  "services": {
+    "update_contents": {
+      "name": "Update parcel contents",
+      "description": "Set what is in a parcel, in your own words, for a tracking code. An empty text clears it.",
+      "fields": {
+        "tracking_code": {
+          "name": "Tracking code",
+          "description": "The tracking code of the parcel."
+        },
+        "contents": {
+          "name": "Contents",
+          "description": "What is in the parcel, in your own words. An empty text clears it."
+        },
+        "config_entry_id": {
+          "name": "Account",
+          "description": "The account to store this for. Needed when no account lists the code yet."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "update_contents_entry_required": {
+      "message": "No account lists this code. Choose the account to store it for."
+    }
+  }
+}
