@@ -43,9 +43,7 @@ async def test_setup_and_unload(hass):
 
     assert entry.state is ConfigEntryState.LOADED
 
-    incoming = hass.states.get(
-        "sensor.allegro_user_example_test_incoming_parcels"
-    )
+    incoming = hass.states.get("sensor.allegro_user_example_test_incoming_parcels")
     assert incoming is not None
     assert incoming.state == "1"
 
