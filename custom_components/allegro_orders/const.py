@@ -29,6 +29,43 @@ class ParcelStatus(StrEnum):
 
 PLATFORMS = [Platform.BUTTON, Platform.CALENDAR, Platform.SENSOR]
 
+# Allegro delivery status (package `delivery.status`, else order
+# `status.primary.status`) → canonical status. ORDER_CANCELLED is not here:
+# cancelled orders are not parcels at all.
+STATUS_MAP: dict[str, ParcelStatus] = {
+    "IN_TRANSIT": ParcelStatus.IN_TRANSIT,
+    "IN_DELIVERY": ParcelStatus.OUT_FOR_DELIVERY,
+    "AVAILABLE_FOR_PICKUP": ParcelStatus.AT_PICKUP_POINT,
+    "DELIVERED": ParcelStatus.DELIVERED,
+    "RETURNED": ParcelStatus.RETURNING,
+    "RETURNED_TO_SENDER": ParcelStatus.RETURNING,
+}
+
+# Courier key → (`carrier` as the suite integration publishes it, that
+# integration's domain or None). Keys are Allegro `/packages` carrierIds; only
+# ALLEGRO and GLS are confirmed from real data. The `carrier` strings must match
+# the suite exactly: the aggregator dedupes on (carrier, barcode).
+ALLEGRO_CARRIERS: dict[str, tuple[str, str | None]] = {
+    "ALLEGRO": ("Allegro One", None),
+    "DPD": ("DPD Polska", "dpd"),
+    "GLS": ("GLS", "gls"),
+    "INPOST": ("InPost", "inpost"),
+    "ORLEN": ("ORLEN Paczka", "orlen_paczka"),
+    "POCZTA_POLSKA": ("Poczta Polska", "poczta_polska"),
+}
+
+# Courier named in an order's `delivery.deliveredBy` ("Delivery by DPD") →
+# ALLEGRO_CARRIERS key. Preferred over carrierId, which may say ALLEGRO for any
+# courier Allegro Delivery contracts (e.g. "Allegro Kurier DPD (AD)").
+DELIVERED_BY: dict[str, str] = {
+    "Allegro One": "ALLEGRO",
+    "DPD": "DPD",
+    "GLS": "GLS",
+    "InPost": "INPOST",
+    "ORLEN Paczka": "ORLEN",
+    "Poczta Polska": "POCZTA_POLSKA",
+}
+
 # Every optional key the parcel contract defines. CAPABILITIES below must be a
 # subset of this — it exists so a typo in CAPABILITIES fails a test instead of
 # silently dropping a carrier off a table on the docs site.
@@ -60,9 +97,7 @@ KNOWN_CAPABILITIES = frozenset(
 #   "url"                parcel["url"] is ever non-null
 #   "history"            the include_history option is implemented and does something
 #   "contents"           parcel["contents"] is ever filled by the carrier (user-supplied text does not count)
-CAPABILITIES = frozenset(
-    {"weight", "dimensions", "delivery_window", "pickup_point", "url", "history"}
-)
+CAPABILITIES = frozenset({"pickup_point", "url", "contents"})
 
 # Fields whose support is not confirmed yet — typically a carrier built without
 # a real parcel to check against. Leave this empty once the open questions are
@@ -73,7 +108,8 @@ CAPABILITIES = frozenset(
 # into CAPABILITIES. A multi-backend carrier declares
 # PENDING_CAPABILITIES_BY_VARIANT with the same keys as its
 # CAPABILITIES_BY_VARIANT instead (omit backends with nothing pending).
-PENDING_CAPABILITIES: frozenset[str] = frozenset()
+# Allegro shows the ETA only as text ("Estimated delivery to: Tue Nov 24").
+PENDING_CAPABILITIES: frozenset[str] = frozenset({"delivery_window"})
 
 # If this carrier ever grows a second backend with a genuinely different
 # payload shape (a country-specific API, not just a config option), replace

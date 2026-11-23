@@ -32,8 +32,10 @@ def _fixture(name: str) -> dict:
 
 
 @pytest.fixture
-def client(hass, aioclient_mock):
-    return AllegroClient(COOKIE, aioclient_mock.create_session(hass.loop))
+async def client(hass, aioclient_mock):
+    session = aioclient_mock.create_session(hass.loop)
+    yield AllegroClient(COOKIE, session)
+    await session.close()
 
 
 async def test_get_login(client, aioclient_mock):

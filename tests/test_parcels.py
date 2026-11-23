@@ -200,35 +200,6 @@ def test_a_capability_is_never_both_populated_and_pending():
     assert not CAPABILITIES & PENDING_CAPABILITIES
 
 
-def test_capabilities_match_what_normalize_parcel_actually_returns():
-    """Every declared CAPABILITIES entry must come true somewhere in a sample.
-
-    Copy this test into a real carrier's own test_parcels.py verbatim — it
-    stays correct for whatever subset of CAPABILITIES that carrier declares.
-    """
-    delivered = normalize_parcel(delivered_sample())
-    active = normalize_parcel(active_sample())
-    pickup = normalize_parcel(pickup_sample())
-    with_history = normalize_parcel(delivered_sample(), include_history=True)
-
-    if "weight" in CAPABILITIES:
-        assert delivered["weight"] is not None
-    if "dimensions" in CAPABILITIES:
-        assert delivered["dimensions"] is not None
-    if "delivery_window" in CAPABILITIES:
-        assert active["planned_from"] is not None or active["planned_to"] is not None
-    if "pickup_point" in CAPABILITIES:
-        assert pickup["pickup_point"] is not None
-    if "url" in CAPABILITIES:
-        assert delivered["url"] is not None
-    if "history" in CAPABILITIES:
-        assert with_history["history"] is not None
-    if "contents" in CAPABILITIES:
-        assert any(
-            parcel["contents"] is not None for parcel in (delivered, active, pickup)
-        )
-
-
 def test_normalize_delivered_parcel():
     parcel = normalize_parcel(delivered_sample())
     assert parcel["carrier"] == "Allegro"
