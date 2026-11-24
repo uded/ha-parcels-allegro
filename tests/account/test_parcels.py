@@ -154,12 +154,15 @@ def test_cancelled_orders_are_dropped():
     ("delivered_by", "carrier", "domain"),
     [
         ("Delivery by Allegro One", "Allegro One", None),
-        ("Delivery by DPD", "DPD Polska", "dpd"),
+        # Allegro Delivery (AD): Allegro's own 17-char number, not trackable by
+        # the courier's integration, so never handed off.
+        ("Delivery by DPD", "DPD Polska", None),
+        ("Delivery by ORLEN Paczka", "ORLEN Paczka", None),
+        # Seller's own courier contract: the courier's waybill.
         ("Delivery by GLS", "GLS", "gls"),
-        ("Delivery by ORLEN Paczka", "ORLEN Paczka", "orlen_paczka"),
     ],
 )
-def test_carrier_from_delivered_by(delivered_by, carrier, domain):
+def test_carrier_and_hand_off_from_real_orders(delivered_by, carrier, domain):
     order = copy.deepcopy(
         next(o for o in _orders() if o["delivery"].get("deliveredBy") == delivered_by)
     )
@@ -168,9 +171,19 @@ def test_carrier_from_delivered_by(delivered_by, carrier, domain):
     assert hand_off_domain(parcel) == domain
 
 
+def test_courier_waybill_is_handed_off():
+    """DPD under the seller's own contract carries DPD's own number."""
+    order = _order("Delivery by DPD", "DELIVERED")
+    order["delivery"]["waybillsData"]["waybills"][0]["carrier"]["name"] = "DPD"
+    parcel = _one([order])
+    assert parcel["carrier"] == "DPD Polska"
+    assert hand_off_domain(parcel) == "dpd"
+
+
 def test_pocztex_is_poczta_polska():
     order = _order("Delivery by Allegro One", "IN_TRANSIT")
     order["delivery"]["deliveredBy"] = "Delivery by Pocztex"
+    order["delivery"]["waybillsData"]["waybills"][0]["carrier"]["name"] = "Pocztex"
     parcel = _one([order])
     assert parcel["carrier"] == "Poczta Polska"
     assert hand_off_domain(parcel) == "poczta_polska"

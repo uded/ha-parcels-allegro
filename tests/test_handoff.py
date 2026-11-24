@@ -18,8 +18,23 @@ CLIENT = "custom_components.allegro_orders.account.client.AllegroClient"
 
 def _courier(code: str = ACTIVE_CODE, delivered_by: str = "Delivery by DPD") -> dict:
     sample = active_sample(code)
-    sample["order"]["delivery"]["deliveredBy"] = delivered_by
+    delivery = sample["order"]["delivery"]
+    delivery["deliveredBy"] = delivered_by
+    # The courier's own waybill (seller's contract), not an Allegro Delivery one.
+    delivery["waybillsData"]["waybills"][0]["carrier"]["name"] = delivered_by.rsplit(
+        maxsplit=1
+    )[-1]
     return sample
+
+
+async def test_allegro_delivery_number_never_handed_off(hass):
+    """'Allegro Kurier DPD (AD)': Allegro's own number, DPD cannot track it."""
+    calls = _register(hass, "dpd")
+    sample = active_sample()
+    sample["order"]["delivery"]["deliveredBy"] = "Delivery by DPD"
+    await _setup(hass, [sample])
+    assert calls == []
+    assert not ir.async_get(hass).issues
 
 
 def _register(hass, domain: str, *, contents: bool = True) -> list[dict]:

@@ -105,7 +105,13 @@ def _carrier(raw: dict[str, Any]) -> str:
 
 
 def hand_off_domain(parcel: dict[str, Any]) -> str | None:
-    """Domain of the suite integration that tracks this parcel's courier, if any."""
+    """Domain of the suite integration that can track this parcel's number, if any.
+
+    Allegro Delivery waybills (e.g. "Allegro Automat ORLEN Paczka") are
+    Allegro's own numbers that only Allegro can track; never hand those off.
+    """
+    if _dict(parcel.get("raw")).get("allegro_number"):
+        return None
     return _DOMAIN_BY_CARRIER.get(parcel.get("carrier") or "")
 
 
@@ -196,5 +202,13 @@ def normalize_parcel(raw: dict[str, Any], *, include_history: bool = False) -> d
         "weight": None,
         "dimensions": None,
         "history": None,
-        "raw": _lean(order, package, waybill),
+        "raw": {
+            **_lean(order, package, waybill),
+            # The waybill's issuer: "Allegro" means Allegro's own tracking number.
+            "allegro_number": (
+                _dict(entry.get("carrier")).get("name") == "Allegro"
+                if entry
+                else raw["carrier_id"] == "ALLEGRO"
+            ),
+        },
     }
