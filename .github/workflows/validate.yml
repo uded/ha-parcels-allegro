@@ -1,5 +1,9 @@
 name: Validate
 
+# Inlined from ha-parcel-integrations/.github carrier-validate.yml (this repo is
+# outside the org). Dropped: the "Check repository policy" step, which requires
+# a committed CLAUDE.md. Every other check runs as in the org.
+
 on:
   push:
     branches:
@@ -13,7 +17,165 @@ permissions:
   contents: read
 
 jobs:
-  validate:
-    uses: ha-parcel-integrations/.github/.github/workflows/carrier-validate.yml@main
-    with:
-      domain: allegro_orders
+  hacs:
+    name: Validate with HACS Action
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: HACS validation
+        uses: hacs/action@main
+        with:
+          category: integration
+
+  hassfest:
+    name: Validate with hassfest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Hassfest validation
+        uses: home-assistant/actions/hassfest@master
+
+  tests:
+    name: Run unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run tests
+        run: >-
+          python -m pytest tests/
+          --cov=custom_components.allegro_orders
+          --cov-fail-under=95 -v
+
+  ruff:
+    name: Lint with Ruff
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # Each carrier's ruff.toml is the template's copy of Home Assistant
+      # core's ruleset, ASYNC included; the version matches core's pin so a
+      # new ruff release can't turn every carrier red overnight.
+      - name: Ruff check
+        uses: astral-sh/ruff-action@v4.1.0
+        with:
+          version: "0.17.0"
+          args: check
+
+      - name: Ruff format
+        uses: astral-sh/ruff-action@v4.1.0
+        with:
+          version: "0.17.0"
+          args: format --check
+
+  mypy:
+    name: Type-check with mypy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt mypy==2.4.0
+
+      - name: mypy
+        run: mypy custom_components/allegro_orders --ignore-missing-imports
+
+  translations:
+    name: Validate translations
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout carrier repository
+        uses: actions/checkout@v7
+
+      - name: Checkout suite scripts
+        uses: actions/checkout@v7
+        with:
+          repository: ha-parcel-integrations/.github
+          path: .suite
+
+      - name: Compare translation structures
+        run: >-
+          python .suite/.github/scripts/check_translations.py
+          custom_components/allegro_orders/translations
+
+  policy:
+    name: Check suite policy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout carrier repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Checkout suite scripts
+        uses: actions/checkout@v7
+        with:
+          repository: ha-parcel-integrations/.github
+          path: .suite
+
+      - name: Check code rules
+        env:
+          DOMAIN: allegro_orders
+        run: python .suite/.github/scripts/check_code_rules.py
+
+      - name: Install Pillow
+        run: pip install pillow
+
+      - name: Check brand icon
+        env:
+          DOMAIN: allegro_orders
+        run: python .suite/.github/scripts/check_brand_icon.py
+
+      - name: Check commit messages
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          if [ "$EVENT_NAME" = "schedule" ] || [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "No pushed commit range to validate."
+            exit 0
+          elif [ "$EVENT_NAME" = "pull_request" ]; then
+            commit_range="$BASE_SHA..$PR_HEAD_SHA"
+          elif [ "$BEFORE" = "0000000000000000000000000000000000000000" ] \
+            || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            # A force-push orphans the previous tip, so it is not fetched and
+            # BEFORE..HEAD cannot resolve. Fall back to everything since the
+            # last release, which is exactly the range that was rewritten.
+            last_tag=$(git tag --list --sort=-v:refname \
+              | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
+            if [ -n "$last_tag" ]; then
+              commit_range="$last_tag..$HEAD_SHA"
+            elif git cat-file -e "$HEAD_SHA^{commit}^" 2>/dev/null; then
+              commit_range="$HEAD_SHA^..$HEAD_SHA"
+            else
+              # No tag and no parent: this is a repo's very first commit.
+              # A bare SHA logs it (and nothing else), where "^.." would fail.
+              commit_range="$HEAD_SHA"
+            fi
+          else
+            commit_range="$BEFORE..$HEAD_SHA"
+          fi
+          python .suite/.github/scripts/check_commit_messages.py "$commit_range"

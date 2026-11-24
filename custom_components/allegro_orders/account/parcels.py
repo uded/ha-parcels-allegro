@@ -106,7 +106,7 @@ def _carrier(raw: dict[str, Any]) -> str:
 
 def hand_off_domain(parcel: dict[str, Any]) -> str | None:
     """Domain of the suite integration that tracks this parcel's courier, if any."""
-    return _DOMAIN_BY_CARRIER.get(parcel.get("carrier"))
+    return _DOMAIN_BY_CARRIER.get(parcel.get("carrier") or "")
 
 
 def _status(raw: dict[str, Any]) -> tuple[ParcelStatus, str | None]:
