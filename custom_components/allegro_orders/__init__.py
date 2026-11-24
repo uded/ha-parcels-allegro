@@ -7,15 +7,17 @@ import logging
 
 import aiohttp
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
-from homeassistant.core import HomeAssistant
+from homeassistant.core import CoreState, HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.start import async_at_started
 
 from .account.client import AllegroClient
 from .account.errors import AllegroApiError, AllegroAuthError
 from .const import CONF_COOKIE, DOMAIN, PLATFORMS
 from .contents import ContentsStore
 from .coordinator import AllegroCoordinator
+from .handoff import HandOff, async_clear_issues
 from .services import async_setup_services, async_unload_services
 
 _LOGGER = logging.getLogger(__name__)
@@ -81,6 +83,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: AllegroConfigEntry) -> b
 
     async_setup_services(hass)
 
+    if hass.state is not CoreState.running:
+        # During startup a courier may not have registered track_parcel
+        # yet, which would read as "not installed".
+        async def _hand_off(_: HomeAssistant) -> None:
+            await coordinator.async_hand_off_after_start()
+
+        entry.async_on_unload(async_at_started(hass, _hand_off))
+
     # No entry.add_update_listener: the options flow is an
     # OptionsFlowWithReload, which may not be combined with one.
     return True
@@ -102,5 +112,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: AllegroConfigEntry) -> 
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: AllegroConfigEntry) -> None:
-    """Delete the contents the user set for the removed entry."""
+    """Forget what this entry stored: hand-offs and user contents."""
+    await HandOff(hass, entry.entry_id, entry.options).async_remove()
     await ContentsStore(hass, entry.entry_id).async_remove()
+    # The courier issues are shared by every entry; the last one clears them.
+    if not hass.config_entries.async_entries(DOMAIN):
+        async_clear_issues(hass)

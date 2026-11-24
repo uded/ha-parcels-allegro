@@ -127,5 +127,11 @@
     "update_contents_entry_required": {
       "message": "No account lists this code. Choose the account to store it for."
     }
+  },
+  "issues": {
+    "carrier_not_set_up": {
+      "title": "{carrier} integration not set up",
+      "description": "Some of your Allegro parcels travel with {carrier}. Install and set up the {carrier} integration to get its delivery window, pickup point and history: {url}. The parcels stay listed by Allegro meanwhile. To stop this, turn off hand-off in the Allegro options."
+    }
   }
 }

@@ -127,5 +127,11 @@
     "update_contents_entry_required": {
       "message": "No account lists this code. Choose the account to store it for."
     }
+  },
+  "issues": {
+    "carrier_not_set_up": {
+      "title": "Brak integracji {carrier}",
+      "description": "Część Twoich przesyłek z Allegro wiezie {carrier}. Zainstaluj i skonfiguruj integrację {carrier}, aby widzieć okno doręczenia, punkt odbioru i historię: {url}. Do tego czasu przesyłki są widoczne w Allegro. Aby wyłączyć ten komunikat, wyłącz przekazywanie w opcjach Allegro."
+    }
   }
 }

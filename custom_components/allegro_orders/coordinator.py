@@ -31,6 +31,7 @@ from .const import (
     ParcelStatus,
 )
 from .contents import ContentsStore, normalize_code
+from .handoff import HandOff
 from .parcels import apply_delivered_filter, sort_parcels_by_ts
 
 _LOGGER = logging.getLogger(__name__)
@@ -136,6 +137,10 @@ class AllegroCoordinator(DataUpdateCoordinator[list[dict]]):
         )
         self._client = client
         self.contents_store = ContentsStore(hass, entry.entry_id)
+        self.handoff = HandOff(hass, entry.entry_id, entry.options)
+        # Every parcel of the last poll, so the hand-off can run again
+        # once Home Assistant has started.
+        self._all_parcels: list[dict] = []
         # Every code the account lists, delivered ones past the retention filter
         # included: update_contents asks which account a code belongs to.
         self.known_codes: frozenset[str] = frozenset()
@@ -159,6 +164,10 @@ class AllegroCoordinator(DataUpdateCoordinator[list[dict]]):
         self._cached_device_id: str | None = None
         # Timestamp of the last successful poll (diagnostic sensor).
         self.last_success_time: datetime | None = None
+
+    async def async_hand_off_after_start(self) -> None:
+        """Run the hand-off that was held back while Home Assistant started."""
+        await self.handoff.async_process(self._all_parcels)
 
     def _apply_contents(self, parcel: dict) -> dict:
         """Put the user's own contents text over the carrier's, when there is one."""
@@ -251,6 +260,8 @@ class AllegroCoordinator(DataUpdateCoordinator[list[dict]]):
             if parcel.get("barcode")
         )
         self._fire_change_events(tracked)
+        self._all_parcels = tracked
+        await self.handoff.async_process(tracked)
         self._known_state = {
             parcel["barcode"]: parcel["status"]
             for parcel in tracked
