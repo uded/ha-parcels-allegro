@@ -85,21 +85,29 @@
     },
     "sensor": {
       "incoming_parcels": {
-        "name": "Incoming parcels",
-        "unit_of_measurement": "parcels"
+        "name": "Przesyłki w drodze",
+        "unit_of_measurement": "przesyłek"
       },
       "next_delivery": {
-        "name": "Next delivery"
+        "name": "Najbliższa dostawa"
       },
       "delivered_parcels": {
-        "name": "Delivered parcels",
-        "unit_of_measurement": "parcels"
+        "name": "Doręczone przesyłki",
+        "unit_of_measurement": "przesyłek"
       },
       "last_update": {
-        "name": "Last successful update"
+        "name": "Ostatnia udana aktualizacja"
       },
       "parcel": {
-        "name": "Parcel {barcode}"
+        "name": "Przesyłka {barcode}"
+      },
+      "en_route_to_pickup_point": {
+        "name": "W drodze do punktu odbioru",
+        "unit_of_measurement": "przesyłek"
+      },
+      "awaiting_pickup": {
+        "name": "Do odebrania",
+        "unit_of_measurement": "przesyłek"
       }
     }
   },
