@@ -5,7 +5,7 @@ import sys
 import pytest
 from pytest_homeassistant_custom_component.plugins import hass  # noqa: F401
 
-from custom_components.allegro_orders import parcels
+from custom_components.allegro_orders.account import parcels
 
 
 @pytest.fixture(autouse=True)
@@ -17,11 +17,11 @@ def auto_enable_custom_integrations(enable_custom_integrations):
 def reset_one_shot_warnings():
     """Clear the "already warned this session" set between tests.
 
-    ``parcels._unmapped_statuses_logged`` is module-level, so without this a
+    ``account.parcels._warned`` is module-level, so without this a
     test's one-shot-warning assertion would depend on which test already
-    triggered that status code first.
+    triggered that code first.
     """
-    parcels._unmapped_statuses_logged.clear()
+    parcels._warned.clear()
 
 
 if sys.platform == "win32":

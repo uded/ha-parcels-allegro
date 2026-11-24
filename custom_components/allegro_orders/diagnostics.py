@@ -12,9 +12,6 @@ from . import AllegroConfigEntry
 # Diagnostics are pasted into public issues, so redact anything that
 # identifies a person, an address or a specific parcel. Over-redacting is
 # cheap; under-redacting leaks a user's home address into a GitHub thread.
-#
-# TODO(carrier): add the carrier's own payload field names below. Walk one real
-# response and check every leaf — nested address blocks are the usual miss.
 TO_REDACT = {
     # canonical fields we publish ourselves
     "tracking_code",
@@ -23,6 +20,18 @@ TO_REDACT = {
     "receiver",
     "contents",
     "url",
+    "pickup_point",
+    # Allegro: the session cookie, pickup secrets, and our lean `raw` (waybill,
+    # order/group ids, package texts that can name the pickup point)
+    "cookie",
+    "code",
+    "qrCode",
+    "receiverPhoneNumber",
+    "waybill",
+    "id",
+    "group_id",
+    "title",
+    "subtitle",
     # carrier payload fields
     "trackingNumber",
     "recipient",

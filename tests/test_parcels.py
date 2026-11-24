@@ -1,14 +1,11 @@
-"""Tests for the pure parcel-mapping helpers.
+"""Tests for the suite-wide parcel helpers kept in parcels.py.
 
-These need no Home Assistant instance — the whole point of keeping
-``parcels.py`` free of I/O is that the carrier-specific mapping (the part you
-rewrite per carrier) can be tested as plain functions.
+The Allegro-specific mapping lives in account/parcels.py and is tested in
+tests/account/test_parcels.py and tests/test_contract.py.
 """
 
-from datetime import UTC, date, datetime, timedelta
-from zoneinfo import ZoneInfo
+from datetime import UTC, datetime, timedelta
 
-import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.allegro_orders.const import (
@@ -22,69 +19,10 @@ from custom_components.allegro_orders.const import (
 )
 from custom_components.allegro_orders.parcels import (
     apply_delivered_filter,
-    build_history,
-    format_dimensions,
     is_pickup,
-    map_event_status,
-    map_parcel_status,
-    normalize_parcel,
     parse_iso,
-    planned_for_status,
-    planned_window,
     sort_parcels_by_ts,
-    to_iso_timestamp,
 )
-
-from .payloads import active_sample, delivered_sample, event, pickup_sample
-
-# ---------------------------------------------------------------------------
-# map_parcel_status / map_event_status
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    ("code", "expected"),
-    [
-        ("REGISTERED", ParcelStatus.REGISTERED),
-        ("IN_TRANSIT", ParcelStatus.IN_TRANSIT),
-        ("OUT_FOR_DELIVERY", ParcelStatus.OUT_FOR_DELIVERY),
-        ("AT_PICKUP_POINT", ParcelStatus.AT_PICKUP_POINT),
-        ("DELIVERED", ParcelStatus.DELIVERED),
-        ("RETURN_TO_SENDER", ParcelStatus.RETURNING),
-        ("EXCEPTION", ParcelStatus.PROBLEM),
-    ],
-)
-def test_map_parcel_status_known(code, expected):
-    assert map_parcel_status(code) == expected
-
-
-def test_map_parcel_status_missing_is_unknown():
-    assert map_parcel_status(None) == ParcelStatus.UNKNOWN
-    assert map_parcel_status("") == ParcelStatus.UNKNOWN
-
-
-def test_map_parcel_status_unmapped_is_unknown():
-    assert map_parcel_status("TELEPORTED") == ParcelStatus.UNKNOWN
-
-
-def test_map_event_status_missing_and_unmapped_are_none():
-    """History keeps ``null`` rather than ``unknown`` so consumers can tell
-    "no mapping" from "mapped to unknown"."""
-    assert map_event_status(None) is None
-    assert map_event_status("SOMETHING_NEW") is None
-    assert map_event_status("DELIVERED") == ParcelStatus.DELIVERED
-
-
-def test_unmapped_status_warns_only_once(caplog):
-    assert map_parcel_status("ABDUCTED") == ParcelStatus.UNKNOWN
-    assert map_parcel_status("ABDUCTED") == ParcelStatus.UNKNOWN
-    assert caplog.text.count("ABDUCTED") == 1
-    assert "issues/new" in caplog.text
-
-
-# ---------------------------------------------------------------------------
-# timestamp helpers
-# ---------------------------------------------------------------------------
 
 
 def test_parse_iso_handles_z_naive_and_garbage():
@@ -95,100 +33,6 @@ def test_parse_iso_handles_z_naive_and_garbage():
     assert parse_iso(None) is None
 
 
-def test_to_iso_timestamp_converts_epoch_milliseconds():
-    assert to_iso_timestamp(1784203767167) == "2026-07-16T12:09:27.167000+00:00"
-    assert to_iso_timestamp("2026-04-29T13:12:42Z") == "2026-04-29T13:12:42Z"
-    assert to_iso_timestamp(None) is None
-    assert to_iso_timestamp(10**20) is None  # out of range -> None, never raises
-
-
-def test_format_dimensions_rounds_the_text():
-    assert format_dimensions(27.9, 5.1, 27.9)["text"] == "28 x 5 x 28 cm"
-
-
-def test_format_dimensions_needs_all_three_axes():
-    assert format_dimensions(30, 20, 10) == {
-        "length": 30,
-        "width": 20,
-        "height": 10,
-        "text": "30 x 20 x 10 cm",
-    }
-    assert format_dimensions(30, None, 10) is None
-
-
-# ---------------------------------------------------------------------------
-# build_history
-# ---------------------------------------------------------------------------
-
-
-def test_build_history_orders_oldest_to_newest():
-    history = build_history(delivered_sample()["events"])
-    assert len(history) == 4
-    assert history[0]["raw_status"] == "Shipment announced"
-    assert history[0]["status"] == ParcelStatus.REGISTERED
-    assert history[-1]["status"] == ParcelStatus.DELIVERED
-
-
-def test_build_history_caps_to_max_events():
-    events = [
-        event("IN_TRANSIT", f"2026-04-{day:02d}T10:00:00Z", "moved")
-        for day in range(1, 26)
-    ]
-    assert len(build_history(events, max_events=20)) == 20
-
-
-def test_build_history_handles_missing_and_malformed():
-    assert build_history(None) == []
-    assert build_history([{"statusCode": "IN_TRANSIT"}]) == []  # no timestamp
-    assert build_history(["not-a-dict"]) == []
-
-
-def test_build_history_keeps_unparseable_timestamp_last():
-    history = build_history(
-        [
-            event("REGISTERED", "2026-04-24T10:00:00Z", "fine"),
-            event("IN_TRANSIT", "not-a-date", "odd"),
-        ]
-    )
-    assert [entry["raw_status"] for entry in history] == ["fine", "odd"]
-
-
-def test_build_history_falls_back_to_status_code_without_text():
-    history = build_history([event("IN_TRANSIT", "2026-04-24T10:00:00Z", "")])
-    assert history[0]["raw_status"] == "IN_TRANSIT"
-
-
-# ---------------------------------------------------------------------------
-# normalize_parcel — the canonical contract
-# ---------------------------------------------------------------------------
-
-CANONICAL_KEYS = [
-    "carrier",
-    "barcode",
-    "sender",
-    "receiver",
-    "contents",
-    "status",
-    "raw_status",
-    "delivered",
-    "delivered_at",
-    "planned_from",
-    "planned_to",
-    "pickup",
-    "pickup_point",
-    "url",
-    "weight",
-    "dimensions",
-    "history",
-    "raw",
-]
-
-
-def test_normalize_publishes_exactly_the_canonical_keys():
-    """The aggregator and cross-carrier dashboards depend on this key set."""
-    assert list(normalize_parcel(delivered_sample())) == CANONICAL_KEYS
-
-
 def test_capabilities_are_known_values():
     """A typo here would silently misreport this carrier on the docs site."""
     assert CAPABILITIES <= KNOWN_CAPABILITIES
@@ -196,120 +40,7 @@ def test_capabilities_are_known_values():
 
 
 def test_a_capability_is_never_both_populated_and_pending():
-    """The docs site would have to pick one; "awaiting data" must not hide a confirmed field."""
     assert not CAPABILITIES & PENDING_CAPABILITIES
-
-
-def test_normalize_delivered_parcel():
-    parcel = normalize_parcel(delivered_sample())
-    assert parcel["carrier"] == "Allegro"
-    assert parcel["barcode"] == "EXAMPLE123456"
-    assert parcel["sender"] == "Example Shop"
-    assert parcel["receiver"] == "Jane Doe"
-    assert parcel["status"] == ParcelStatus.DELIVERED
-    assert parcel["raw_status"] == "Delivered to the recipient"
-    assert parcel["delivered"] is True
-    assert parcel["delivered_at"] == "2026-04-29T13:12:42Z"
-    # A delivered parcel drops its ETA — the window is meaningless once it has
-    # arrived.
-    assert parcel["planned_from"] is None
-    assert parcel["planned_to"] is None
-    assert parcel["url"] == "https://example-carrier.test/track?code=EXAMPLE123456"
-    assert parcel["weight"] == 1.25
-    assert parcel["dimensions"]["text"] == "30 x 20 x 10 cm"
-    assert parcel["history"] is None  # opt-in, default off
-
-
-def test_normalize_history_is_opt_in():
-    parcel = normalize_parcel(delivered_sample(), include_history=True)
-    assert len(parcel["history"]) == 4
-    assert parcel["history"][0]["status"] == ParcelStatus.REGISTERED
-
-
-def test_normalize_active_parcel_has_window():
-    parcel = normalize_parcel(active_sample())
-    assert parcel["status"] == ParcelStatus.OUT_FOR_DELIVERY
-    assert parcel["delivered"] is False
-    assert parcel["planned_from"] == "2026-04-29T13:00:00Z"
-    assert parcel["planned_to"] == "2026-04-29T15:00:00Z"
-
-
-def test_normalize_stretches_a_point_estimate_to_the_end_of_the_day():
-    raw = active_sample()
-    raw["estimatedDelivery"]["to"] = raw["estimatedDelivery"]["from"]
-    parcel = normalize_parcel(raw)
-    assert parcel["planned_from"] == "2026-04-29T13:00:00Z"
-    assert parcel["planned_to"] == "2026-04-29T23:59:59+00:00"
-
-
-def test_normalize_empties_the_window_at_the_pickup_point_and_when_returning():
-    for code in ("AT_PICKUP_POINT", "RETURN_TO_SENDER"):
-        raw = active_sample()
-        raw["statusCode"] = code
-        parcel = normalize_parcel(raw)
-        assert parcel["planned_from"] is None
-        assert parcel["planned_to"] is None
-
-
-def test_normalize_keeps_pickup_after_collection():
-    raw = pickup_sample()
-    raw["statusCode"] = "DELIVERED"
-    parcel = normalize_parcel(raw)
-    assert parcel["delivered"] is True
-    assert parcel["pickup"] is True
-    assert parcel["pickup_point"] == "Example Point Central Station"
-
-
-def test_normalize_pickup_from_an_earlier_event():
-    raw = active_sample()
-    raw["statusCode"] = "DELIVERED"
-    raw["events"] = [event("AT_PICKUP_POINT", "2026-04-29T09:00:00Z", "Ready")]
-    parcel = normalize_parcel(raw)
-    assert parcel["pickup"] is True
-    assert parcel["pickup_point"] is None
-
-
-def test_normalize_pickup_parcel():
-    parcel = normalize_parcel(pickup_sample())
-    assert parcel["status"] == ParcelStatus.AT_PICKUP_POINT
-    assert parcel["pickup"] is True
-    assert parcel["pickup_point"] == "Example Point Central Station"
-
-
-def test_normalize_pending_placeholder():
-    """A tracked-but-not-yet-scanned code still yields a full parcel dict."""
-    parcel = normalize_parcel({"trackingNumber": "EXAMPLE000001"})
-    assert parcel["status"] == ParcelStatus.UNKNOWN
-    assert parcel["delivered"] is False
-    assert parcel["raw_status"] is None
-    assert parcel["weight"] is None
-    assert parcel["dimensions"] is None
-    assert parcel["history"] is None
-
-
-def test_normalize_blank_fields_become_none():
-    raw = active_sample()
-    raw["sender"] = ""
-    raw["recipient"] = ""
-    parcel = normalize_parcel(raw)
-    assert parcel["sender"] is None
-    assert parcel["receiver"] is None
-
-
-def test_normalize_keeps_raw_payload():
-    raw = active_sample()
-    assert normalize_parcel(raw)["raw"] is raw
-
-
-def test_normalize_falls_back_to_status_code_without_text():
-    raw = active_sample()
-    raw["statusText"] = None
-    assert normalize_parcel(raw)["raw_status"] == "OUT_FOR_DELIVERY"
-
-
-# ---------------------------------------------------------------------------
-# sort_parcels_by_ts
-# ---------------------------------------------------------------------------
 
 
 def test_sort_parcels_ascending_puts_unparseable_last():
@@ -333,11 +64,6 @@ def test_sort_parcels_descending_still_puts_unparseable_last():
         for p in sort_parcels_by_ts(parcels, "delivered_at", descending=True)
     ]
     assert ordered == ["a", "c", "b"]
-
-
-# ---------------------------------------------------------------------------
-# apply_delivered_filter
-# ---------------------------------------------------------------------------
 
 
 def _entry(filter_type: str, amount: int) -> MockConfigEntry:
@@ -373,110 +99,6 @@ def test_delivered_filter_keeps_unparseable_timestamp():
     """Better to show a parcel with a broken date than to silently drop it."""
     parcels = [{"barcode": "WEIRD", "delivered_at": "nonsense"}]
     assert apply_delivered_filter(parcels, _entry("days", 7)) == parcels
-
-
-_AMS = ZoneInfo("Europe/Amsterdam")
-
-
-@pytest.mark.parametrize(
-    ("start", "end", "expected"),
-    [
-        (
-            "2026-04-29T13:00:00+02:00",
-            "2026-04-29T15:00:00+02:00",
-            ("2026-04-29T13:00:00+02:00", "2026-04-29T15:00:00+02:00"),
-        ),
-        (
-            "2026-04-29T13:00:00+02:00",
-            None,
-            ("2026-04-29T13:00:00+02:00", "2026-04-29T23:59:59+02:00"),
-        ),
-        (
-            "2026-04-29T13:00:00+02:00",
-            "2026-04-29T13:00:00+02:00",
-            ("2026-04-29T13:00:00+02:00", "2026-04-29T23:59:59+02:00"),
-        ),
-        (
-            "2026-04-29T13:00:00",
-            None,
-            ("2026-04-29T13:00:00+02:00", "2026-04-29T23:59:59+02:00"),
-        ),
-        (
-            "2026-04-29",
-            None,
-            ("2026-04-29T00:00:00+02:00", "2026-04-29T23:59:59+02:00"),
-        ),
-        (
-            date(2026, 4, 29),
-            date(2026, 4, 29),
-            ("2026-04-29T00:00:00+02:00", "2026-04-29T23:59:59+02:00"),
-        ),
-        (
-            "2026-04-29",
-            "2026-05-01",
-            ("2026-04-29T00:00:00+02:00", "2026-05-01T23:59:59+02:00"),
-        ),
-        (
-            "2026-04-29T15:00:00+02:00",
-            "2026-04-29T13:00:00+02:00",
-            ("2026-04-29T13:00:00+02:00", "2026-04-29T15:00:00+02:00"),
-        ),
-        (
-            None,
-            "2026-04-29T13:00:00+02:00",
-            ("2026-04-29T13:00:00+02:00", "2026-04-29T23:59:59+02:00"),
-        ),
-        (
-            datetime(2026, 4, 29, 13, 0),
-            datetime(2026, 4, 29, 15, 0),
-            ("2026-04-29T13:00:00+02:00", "2026-04-29T15:00:00+02:00"),
-        ),
-        (
-            "2026-04-29T23:30:00Z",
-            None,
-            ("2026-04-29T23:30:00Z", "2026-04-30T23:59:59+02:00"),
-        ),
-        (
-            "2026-04-29T13:00:00+02:00",
-            "2026-04-29",
-            ("2026-04-29T13:00:00+02:00", "2026-04-29T23:59:59+02:00"),
-        ),
-        (
-            "2026-04-29",
-            "2026-04-28T10:00:00+02:00",
-            ("2026-04-28T10:00:00+02:00", "2026-04-29T23:59:59+02:00"),
-        ),
-        (
-            "2026-04-29T23:59:59+02:00",
-            None,
-            ("2026-04-29T23:59:59+02:00", None),
-        ),
-        (None, None, (None, None)),
-        ("garbage", None, (None, None)),
-        (12, 13, (None, None)),
-    ],
-)
-def test_planned_window_shapes(start, end, expected):
-    assert planned_window(start, end, zone=_AMS) == expected
-
-
-@pytest.mark.parametrize(
-    "status",
-    [ParcelStatus.AT_PICKUP_POINT, ParcelStatus.RETURNING, ParcelStatus.DELIVERED],
-)
-def test_planned_for_status_empties_the_window(status):
-    assert planned_for_status(status, "a", "b") == (None, None)
-
-
-def test_planned_for_status_keeps_the_window_otherwise():
-    for status in (
-        ParcelStatus.REGISTERED,
-        ParcelStatus.IN_TRANSIT,
-        ParcelStatus.OUT_FOR_DELIVERY,
-        ParcelStatus.PROBLEM,
-        ParcelStatus.UNKNOWN,
-    ):
-        assert planned_for_status(status, "a", "b") == ("a", "b")
 
 
 def test_is_pickup_sources():

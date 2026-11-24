@@ -13,7 +13,7 @@ from homeassistant.helpers.update_coordinator import UpdateFailed
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.allegro_orders.api import AllegroApiError
+from custom_components.allegro_orders.account.errors import AllegroApiError
 from custom_components.allegro_orders.const import (
     CONF_DELIVERED_FILTER_AMOUNT,
     CONF_DELIVERED_FILTER_TYPE,
@@ -152,7 +152,7 @@ def _entry() -> MockConfigEntry:
         domain=DOMAIN,
         title=EMAIL,
         unique_id=EMAIL,
-        data={"email": EMAIL, "password": "hunter2"},
+        data={"cookie": "cookie-value"},
         options={
             CONF_DELIVERED_FILTER_TYPE: "parcels",
             CONF_DELIVERED_FILTER_AMOUNT: 100,

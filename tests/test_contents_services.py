@@ -4,7 +4,6 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, patch
 
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.util import dt as dt_util
 import pytest
@@ -18,7 +17,7 @@ from custom_components.allegro_orders.coordinator import AllegroCoordinator
 
 from .payloads import ACTIVE_CODE, DELIVERED_CODE, active_sample, delivered_sample
 
-CLIENT = "custom_components.allegro_orders.api.AllegroApiClient"
+CLIENT = "custom_components.allegro_orders.account.client.AllegroClient"
 REFRESH = f"{AllegroCoordinator.__module__}.AllegroCoordinator"
 UNTRACKED = "EXAMPLE555555"
 STORE_KEY = f"{DOMAIN}.contents.%s"
@@ -29,7 +28,7 @@ def _config_entry(email: str = "user@example.test") -> MockConfigEntry:
         domain=DOMAIN,
         title=email,
         unique_id=email,
-        data={CONF_EMAIL: email, CONF_PASSWORD: "hunter2"},
+        data={"cookie": "cookie-value"},
     )
 
 
@@ -40,7 +39,7 @@ async def _setup(
     parcels = [active_sample()] if parcels is None else parcels
     entry.add_to_hass(hass)
     with (
-        patch(f"{CLIENT}.async_login", new=AsyncMock(return_value={})),
+        patch(f"{CLIENT}.async_get_login", new=AsyncMock(return_value="buyer_login")),
         patch(
             f"{CLIENT}.async_get_parcels",
             new=AsyncMock(return_value=parcels),
@@ -69,7 +68,9 @@ def _contents(entry: MockConfigEntry, code: str) -> str | None:
 
 async def test_a_parcel_has_no_contents_without_a_stored_value(hass):
     entry = await _setup(hass)
-    assert _contents(entry, ACTIVE_CODE) is None
+    assert (
+        _contents(entry, ACTIVE_CODE) == "Example item"
+    )  # the offer title, until the user sets one
 
 
 async def test_update_contents_sets_replaces_and_clears(hass):
@@ -82,7 +83,7 @@ async def test_update_contents_sets_replaces_and_clears(hass):
     assert _contents(entry, ACTIVE_CODE) == "Winter socks"
 
     await _call(hass, {CONF_TRACKING_CODE: ACTIVE_CODE, "contents": "  "})
-    assert _contents(entry, ACTIVE_CODE) is None
+    assert _contents(entry, ACTIVE_CODE) == "Example item"
 
 
 async def test_update_contents_without_text_clears(hass):
@@ -91,7 +92,7 @@ async def test_update_contents_without_text_clears(hass):
 
     await _call(hass, {CONF_TRACKING_CODE: ACTIVE_CODE})
 
-    assert _contents(entry, ACTIVE_CODE) is None
+    assert _contents(entry, ACTIVE_CODE) == "Example item"
 
 
 async def test_update_contents_normalizes_the_code(hass):
@@ -164,7 +165,7 @@ async def test_a_stored_value_survives_a_restart_of_the_entry(hass, hass_storage
 
 async def _setup_again(hass, entry: MockConfigEntry) -> None:
     with (
-        patch(f"{CLIENT}.async_login", new=AsyncMock(return_value={})),
+        patch(f"{CLIENT}.async_get_login", new=AsyncMock(return_value="buyer_login")),
         patch(
             f"{CLIENT}.async_get_parcels",
             new=AsyncMock(return_value=[active_sample()]),

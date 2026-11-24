@@ -4,18 +4,20 @@ from unittest.mock import AsyncMock, patch
 
 import aiohttp
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 from homeassistant.helpers import entity_registry as er
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.allegro_orders.api import AllegroApiError, AllegroAuthError
+from custom_components.allegro_orders.account.errors import (
+    AllegroApiError,
+    AllegroAuthError,
+)
 from custom_components.allegro_orders.const import DOMAIN
 
 from .payloads import ACTIVE_CODE, active_sample
 
 EMAIL = "user@example.test"
-CLIENT = "custom_components.allegro_orders.api.AllegroApiClient"
+CLIENT = "custom_components.allegro_orders.account.client.AllegroClient"
 
 
 def _entry() -> MockConfigEntry:
@@ -23,7 +25,7 @@ def _entry() -> MockConfigEntry:
         domain=DOMAIN,
         title=EMAIL,
         unique_id=EMAIL,
-        data={CONF_EMAIL: EMAIL, CONF_PASSWORD: "hunter2"},
+        data={"cookie": "cookie-value"},
     )
 
 
@@ -32,7 +34,7 @@ async def test_setup_and_unload(hass):
     entry.add_to_hass(hass)
 
     with (
-        patch(f"{CLIENT}.async_login", new=AsyncMock(return_value={})),
+        patch(f"{CLIENT}.async_get_login", new=AsyncMock(return_value="buyer_login")),
         patch(
             f"{CLIENT}.async_get_parcels",
             new=AsyncMock(return_value=[active_sample()]),
@@ -57,7 +59,7 @@ async def test_rejected_credentials_start_reauth(hass):
     entry.add_to_hass(hass)
 
     with patch(
-        f"{CLIENT}.async_login",
+        f"{CLIENT}.async_get_login",
         new=AsyncMock(side_effect=AllegroAuthError("HTTP 401")),
     ):
         assert not await hass.config_entries.async_setup(entry.entry_id)
@@ -79,7 +81,7 @@ async def test_outage_retries_instead_of_reauth(hass, error):
     entry = _entry()
     entry.add_to_hass(hass)
 
-    with patch(f"{CLIENT}.async_login", new=AsyncMock(side_effect=error)):
+    with patch(f"{CLIENT}.async_get_login", new=AsyncMock(side_effect=error)):
         assert not await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
 
@@ -97,7 +99,7 @@ async def test_setup_retries_when_first_refresh_fails(hass):
     entry.add_to_hass(hass)
 
     with (
-        patch(f"{CLIENT}.async_login", new=AsyncMock(return_value={})),
+        patch(f"{CLIENT}.async_get_login", new=AsyncMock(return_value="buyer_login")),
         patch(
             f"{CLIENT}.async_get_parcels",
             new=AsyncMock(side_effect=AllegroApiError("HTTP 503")),
@@ -116,7 +118,7 @@ async def test_failed_platform_setup_closes_the_session(hass):
     entry.add_to_hass(hass)
 
     with (
-        patch(f"{CLIENT}.async_login", new=AsyncMock(return_value={})),
+        patch(f"{CLIENT}.async_get_login", new=AsyncMock(return_value="buyer_login")),
         patch(
             f"{CLIENT}.async_get_parcels",
             new=AsyncMock(return_value=[active_sample()]),
@@ -142,7 +144,7 @@ async def test_per_parcel_sensor_spawn_and_remove(hass):
 
     parcels = AsyncMock(return_value=[active_sample()])
     with (
-        patch(f"{CLIENT}.async_login", new=AsyncMock(return_value={})),
+        patch(f"{CLIENT}.async_get_login", new=AsyncMock(return_value="buyer_login")),
         patch(f"{CLIENT}.async_get_parcels", new=parcels),
     ):
         assert await hass.config_entries.async_setup(entry.entry_id)
@@ -168,3 +170,50 @@ async def test_per_parcel_sensor_spawn_and_remove(hass):
             )
             is None
         )
+
+
+async def test_coordinator_api_error_keeps_last_data(hass):
+    """A bot-protection page or outage mid-run keeps the parcels, no reauth."""
+    entry = _entry()
+    entry.add_to_hass(hass)
+    parcels = AsyncMock(return_value=[active_sample()])
+    with (
+        patch(f"{CLIENT}.async_get_login", new=AsyncMock(return_value="buyer_login")),
+        patch(f"{CLIENT}.async_get_parcels", new=parcels),
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        coordinator = entry.runtime_data.coordinator
+
+        parcels.side_effect = AllegroApiError("not JSON (bot protection page?)")
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+
+    assert coordinator.last_update_success is False
+    assert [p["barcode"] for p in coordinator.data] == [ACTIVE_CODE]
+    assert not hass.config_entries.flow.async_progress()
+    assert entry.state is ConfigEntryState.LOADED
+
+
+async def test_coordinator_auth_error_triggers_reauth(hass, caplog):
+    """The cookie expiring between polls opens reauth without a traceback."""
+    entry = _entry()
+    entry.add_to_hass(hass)
+    parcels = AsyncMock(return_value=[active_sample()])
+    with (
+        patch(f"{CLIENT}.async_get_login", new=AsyncMock(return_value="buyer_login")),
+        patch(f"{CLIENT}.async_get_parcels", new=parcels),
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        parcels.side_effect = AllegroAuthError("redirect to login")
+        await entry.runtime_data.coordinator.async_refresh()
+        await hass.async_block_till_done()
+
+    assert any(
+        flow["context"]["source"] == "reauth"
+        for flow in hass.config_entries.flow.async_progress()
+    )
+    # HA logs one ERROR line; the stack trace only at DEBUG.
+    assert not [r for r in caplog.records if r.levelno >= 30 and r.exc_info]

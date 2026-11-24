@@ -4,29 +4,27 @@
     "step": {
       "user": {
         "title": "Set up Allegro",
-        "description": "Sign in with the account you use on the Allegro website or app. Your parcels are read from that account.",
+        "description": "Allegro has no sign-in for apps, so this uses your browser's session. On allegro.pl, signed in, open the developer tools (F12) → Application (Chrome) or Storage (Firefox) → Cookies → https://allegro.pl, and copy the value of QXLSESSID.",
         "data": {
-          "email": "E-mail address",
-          "password": "Password"
+          "cookie": "QXLSESSID cookie"
         }
       },
       "reauth_confirm": {
-        "title": "Allegro sign-in expired",
-        "description": "Allegro no longer accepts the stored credentials. Enter them again for {account}.",
+        "title": "Allegro session expired",
+        "description": "Allegro no longer accepts the stored session cookie. Allegro has no sign-in for apps, so this uses your browser's session. On allegro.pl, signed in, open the developer tools (F12) → Application (Chrome) or Storage (Firefox) → Cookies → https://allegro.pl, and copy the value of QXLSESSID.",
         "data": {
-          "email": "E-mail address",
-          "password": "Password"
+          "cookie": "QXLSESSID cookie"
         }
       }
     },
     "error": {
-      "invalid_auth": "Allegro rejected these credentials.",
+      "invalid_auth": "Allegro rejected this cookie. Copy a fresh one.",
       "cannot_connect": "Could not reach Allegro. Please try again."
     },
     "abort": {
       "already_configured": "That Allegro account is already set up.",
       "reauth_successful": "Allegro was reauthenticated successfully.",
-      "wrong_account": "Those credentials are for a different Allegro account. Sign in with the account this entry was set up for."
+      "wrong_account": "That cookie belongs to a different Allegro account. Use the account this entry was set up for."
     }
   },
   "options": {
@@ -45,13 +43,13 @@
               "delivered_filter_amount": "Number of days or parcels to show."
             }
           },
-          "history": {
-            "name": "Parcel history",
+          "hand_off": {
+            "name": "Courier integrations",
             "data": {
-              "include_history": "Include status history"
+              "hand_off": "Hand parcels to courier integrations"
             },
             "data_description": {
-              "include_history": "Add a per-parcel history attribute listing each status update (timestamp, status, original text). Off by default."
+              "hand_off": "When a parcel's courier has its own integration (InPost, DPD, GLS, ORLEN Paczka, Poczta Polska), add the waybill there too, with the item name. Allegro One parcels always stay here."
             }
           }
         }

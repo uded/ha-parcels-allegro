@@ -12,6 +12,7 @@ from typing import Any
 import aiohttp
 
 from .errors import AllegroApiError, AllegroAuthError
+from .parcels import join_parcels
 
 USERS_URL = "https://api.allegro.pl/users"
 ORDERS_URL = "https://api.allegro.pl/myorder-api/myorders?limit=25"
@@ -97,6 +98,12 @@ class AllegroClient:
         if not isinstance(packages, list):
             raise AllegroApiError("unexpected body (no packages)")
         return [package for package in packages if isinstance(package, dict)]
+
+    async def async_get_parcels(self) -> list[dict[str, Any]]:
+        """Return one raw parcel per waybill (see ``parcels.join_parcels``)."""
+        orders = await self.async_get_orders()
+        packages = await self.async_get_packages()
+        return join_parcels(orders, packages)
 
 
 def _retry_after(header: str | None) -> float | None:

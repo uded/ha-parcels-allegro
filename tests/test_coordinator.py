@@ -10,7 +10,8 @@ from homeassistant.helpers import device_registry as dr
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.allegro_orders.api import AllegroAuthError
+from custom_components.allegro_orders.account.errors import AllegroAuthError
+from custom_components.allegro_orders.account.parcels import normalize_parcel
 from custom_components.allegro_orders.const import (
     CONF_DELIVERED_FILTER_AMOUNT,
     CONF_DELIVERED_FILTER_TYPE,
@@ -18,7 +19,6 @@ from custom_components.allegro_orders.const import (
     ParcelStatus,
 )
 from custom_components.allegro_orders.coordinator import AllegroCoordinator
-from custom_components.allegro_orders.parcels import normalize_parcel
 
 from .payloads import ACTIVE_CODE, active_sample, delivered_sample
 
@@ -31,7 +31,7 @@ def _entry() -> MockConfigEntry:
         domain=DOMAIN,
         title=EMAIL,
         unique_id=EMAIL,
-        data={"email": EMAIL, "password": "hunter2"},
+        data={"cookie": "cookie-value"},
         # Keep-most-recent-100 so the delivered-retention filter never trims
         # the (old, fixed-date) sample parcels these tests assert on.
         options={
@@ -42,10 +42,7 @@ def _entry() -> MockConfigEntry:
 
 
 def _in_transit(code: str = ACTIVE_CODE) -> dict:
-    sample = active_sample(code)
-    sample["statusCode"] = "IN_TRANSIT"
-    sample["statusText"] = "In transit"
-    return sample
+    return active_sample(code, "IN_TRANSIT")
 
 
 # ---------------------------------------------------------------------------
@@ -226,57 +223,6 @@ async def test_fires_registered_event_for_new_parcel(hass):
     assert events[0].data["barcode"] == "EXAMPLE888888"
 
 
-async def test_fires_delivery_time_changed_event(hass):
-    entry = _entry()
-    entry.add_to_hass(hass)
-    client = AsyncMock()
-    coordinator = AllegroCoordinator(hass, client, entry)
-
-    events = []
-    hass.bus.async_listen(
-        f"{DOMAIN}_parcel_delivery_time_changed", lambda e: events.append(e)
-    )
-
-    client.async_get_parcels.return_value = [active_sample()]
-    await coordinator._async_update_data()  # first refresh: suppressed
-
-    moved = active_sample()
-    moved["estimatedDelivery"] = {
-        "from": "2026-04-29T16:00:00Z",
-        "to": "2026-04-29T18:00:00Z",
-    }
-    client.async_get_parcels.return_value = [moved]
-    await coordinator._async_update_data()
-    await hass.async_block_till_done()
-
-    assert len(events) == 1
-    assert events[0].data["new_planned_from"] == "2026-04-29T16:00:00Z"
-
-
-async def test_losing_the_eta_is_silent(hass):
-    """value -> null just means the carrier lost the window; not worth an alert."""
-    entry = _entry()
-    entry.add_to_hass(hass)
-    client = AsyncMock()
-    coordinator = AllegroCoordinator(hass, client, entry)
-
-    events = []
-    hass.bus.async_listen(
-        f"{DOMAIN}_parcel_delivery_time_changed", lambda e: events.append(e)
-    )
-
-    client.async_get_parcels.return_value = [active_sample()]
-    await coordinator._async_update_data()
-
-    dropped = active_sample()
-    dropped["estimatedDelivery"] = {"from": None, "to": None}
-    client.async_get_parcels.return_value = [dropped]
-    await coordinator._async_update_data()
-    await hass.async_block_till_done()
-
-    assert events == []
-
-
 async def test_a_parcel_the_delivered_list_leaves_out_still_fires_delivered(hass):
     """The retention option limits the delivered sensor, never the events."""
     entry = _entry()
@@ -296,7 +242,7 @@ async def test_a_parcel_the_delivered_list_leaves_out_still_fires_delivered(hass
 
     older = delivered_sample(ACTIVE_CODE)
     newer = delivered_sample(other)
-    newer["deliveredAt"] = "2026-04-30T13:12:42Z"
+    newer["order"]["delivery"]["timestamp"] = "2026-04-30T13:12:42Z"
     client.async_get_parcels.return_value = [older, newer]
     await coordinator._async_update_data()
     await hass.async_block_till_done()
@@ -355,17 +301,3 @@ async def test_user_contents_reaches_the_delivered_list_and_events(hass):
 
     assert coordinator.delivered[0]["contents"] == "Running shoes"
     assert delivered[0].data["contents"] == "Running shoes"
-
-
-async def test_a_parcel_without_a_barcode_gets_no_user_contents(hass):
-    entry = _entry()
-    entry.add_to_hass(hass)
-    client = AsyncMock()
-    sample = active_sample()
-    del sample["trackingNumber"]
-    client.async_get_parcels.return_value = [sample]
-    coordinator = AllegroCoordinator(hass, client, entry)
-
-    data = await coordinator._async_update_data()
-
-    assert data[0]["contents"] is None

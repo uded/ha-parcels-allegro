@@ -81,12 +81,10 @@ KNOWN_CAPABILITIES = frozenset(
     }
 )
 
-# TODO(carrier): trim this down to what the carrier's API actually exposes.
-#
-# Every value not listed here must come back as a literal ``None`` from
-# normalize_parcel() in parcels.py (or, for "history", CONF_INCLUDE_HISTORY
-# must not be wired to anything real) — never omit the key, just leave it
-# empty. The docs site's carrier comparison table is generated straight from
+# What Allegro's data actually fills (checked by tests/test_contract.py).
+# Every value not listed here comes back as a literal ``None`` from
+# account/parcels.py normalize_parcel(); Allegro has no event history, weight
+# or dimensions. The docs site's carrier comparison table is generated straight from
 # this constant, so drift here does not stay a local mistake, it becomes a
 # wrong claim on the website.
 #
@@ -127,19 +125,15 @@ PENDING_CAPABILITIES: frozenset[str] = frozenset({"delivery_window"})
 # preemptively: a single-backend carrier (the common case) keeps the flat
 # CAPABILITIES above.
 
-# TODO(carrier): point these at the real endpoints.
-#
-# ``LOGIN_URL`` exchanges the user's credentials for a session; ``PARCELS_URL``
-# returns the account's parcels. ``TRACKING_URL`` is the human-facing deep link
-# surfaced on each parcel's ``url`` field. Document what you know about the
-# endpoints right here — auth mechanism (cookie? bearer token? how long does it
-# last?), rate limits, response content type, and what a rejected credential
-# looks like versus an outage. The next person has no other source in this repo
-# — the full write-up lives in your own private research notes, not in this
-# repo.
-LOGIN_URL = "https://api.example-carrier.test/v1/login"
-PARCELS_URL = "https://api.example-carrier.test/v1/parcels"
-TRACKING_URL = "https://example-carrier.test/track?code={tracking_code}"
+# Auth: the QXLSESSID session cookie of allegro.pl, pasted by the user. It is
+# sent as a Cookie header to the undocumented buyer endpoints in
+# account/client.py; 401/403 or a 302 to the login page means it expired.
+CONF_COOKIE = "cookie"
+
+# Hand parcels of couriers with their own suite integration over to it
+# (`<domain>.track_parcel`), like ha-amazon. On by default.
+CONF_HAND_OFF = "hand_off"
+DEFAULT_HAND_OFF = True
 
 # Delivered-parcels retention: keep delivered parcels visible for the last N
 # days, or keep only the N most recent — identical across the suite.
@@ -170,16 +164,6 @@ HOT_LOOKAHEAD_HOURS = 1
 # different installs don't all hit an anchor or tier boundary at the same
 # second. Deterministic (hash of the config entry id), not random.
 STAGGER_MINUTES = 7
-
-# Per-parcel status history is opt-in and off by default, identical across the
-# suite. Keep it off by default: it is a large attribute, and on carriers that
-# need a second call per parcel the cost is real.
-CONF_INCLUDE_HISTORY = "include_history"
-DEFAULT_INCLUDE_HISTORY = False
-
-# Cap each parcel's history to the most recent N events so the attribute stays
-# well under HA's ~16 KB state-attribute limit.
-HISTORY_MAX_EVENTS = 20
 
 # The user-set parcel contents, and the tracking code the contents action is keyed on.
 CONF_CONTENTS = "contents"

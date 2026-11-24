@@ -54,6 +54,56 @@ async def test_diagnostics_redacts_and_counts(hass):
     assert result["incoming"][0]["status"] == "out_for_delivery"
 
 
+async def test_diagnostics_redacts_cookie_and_pickup_codes(hass):
+    """Allegro specifics: the cookie, pickup secrets, waybills, order ids, places."""
+    entry = MagicMock()
+    entry.options = {"cookie": "secret-cookie"}
+    entry.runtime_data.coordinator.current_tier_minutes = 15
+    entry.runtime_data.coordinator.update_interval = timedelta(minutes=15)
+    entry.runtime_data.coordinator.data = [
+        {
+            "barcode": "W1",
+            "status": "at_pickup_point",
+            "pickup_point": "Paczkomat WAW01A",
+            "raw": {
+                "waybill": "W1",
+                "order": {
+                    "id": "order-uuid",
+                    "group_id": "group-uuid",
+                    "delivered_by": "Delivery by DPD",
+                    "status": "AVAILABLE_FOR_PICKUP",
+                },
+                "package": {
+                    "title": "Odbierz paczkę",
+                    "subtitle": "Paczkomat WAW01A",
+                    "code": "123456",
+                    "qrCode": "QR",
+                    "receiverPhoneNumber": "+48600000000",
+                },
+            },
+        }
+    ]
+    entry.runtime_data.coordinator.delivered = []
+    entry.runtime_data.coordinator.delivered_codes = set()
+
+    result = await async_get_config_entry_diagnostics(hass, entry)
+
+    text = str(result)
+    for secret in (
+        "secret-cookie",
+        "W1",
+        "order-uuid",
+        "group-uuid",
+        "WAW01A",
+        "123456",
+        "+48600000000",
+    ):
+        assert secret not in text, secret
+    raw = result["incoming"][0]["raw"]
+    assert raw["order"]["status"] == "AVAILABLE_FOR_PICKUP"
+    assert raw["order"]["delivered_by"] == "Delivery by DPD"
+
+
 async def test_diagnostics_reports_suspended_polling(hass):
     """update_interval None (Section 2.1's full stop) must be visible, not just absent."""
     entry = MagicMock()

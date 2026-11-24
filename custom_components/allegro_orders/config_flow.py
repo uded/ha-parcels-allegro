@@ -1,4 +1,8 @@
-"""Config flow for the Allegro parcel tracker integration."""
+"""Config flow for the Allegro parcel tracker integration.
+
+Auth is the allegro.pl session cookie (QXLSESSID): Allegro has no buyer API
+and its login form sits behind 2FA and captcha.
+"""
 
 from __future__ import annotations
 
@@ -13,31 +17,42 @@ from homeassistant.config_entries import (
     ConfigFlowResult,
     OptionsFlowWithReload,
 )
-from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import section
 from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import voluptuous as vol
 
-from .api import AllegroApiClient, AllegroApiError, AllegroAuthError
+from .account.client import AllegroClient
+from .account.errors import AllegroApiError, AllegroAuthError
 from .const import (
+    CONF_COOKIE,
     CONF_DELIVERED_FILTER_AMOUNT,
     CONF_DELIVERED_FILTER_TYPE,
-    CONF_INCLUDE_HISTORY,
+    CONF_HAND_OFF,
     DEFAULT_DELIVERED_FILTER_AMOUNT,
     DEFAULT_DELIVERED_FILTER_TYPE,
-    DEFAULT_INCLUDE_HISTORY,
+    DEFAULT_HAND_OFF,
     DOMAIN,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
-# TODO(carrier): adjust if the carrier logs in with something other than an
-# e-mail address (a customer number, a phone number).
-_USER_SCHEMA = vol.Schema(
-    {vol.Required(CONF_EMAIL): str, vol.Required(CONF_PASSWORD): str}
+_COOKIE_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_COOKIE): selector.TextSelector(
+            selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
+        )
+    }
 )
+
+
+def _clean_cookie(value: str) -> str:
+    """Accept the bare value or a pasted ``QXLSESSID=value`` pair."""
+    value = value.strip()
+    if value.startswith("QXLSESSID="):
+        value = value.removeprefix("QXLSESSID=").split(";", 1)[0].strip()
+    return value
 
 
 class AllegroConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -53,82 +68,66 @@ class AllegroConfigFlow(ConfigFlow, domain=DOMAIN):
         """Return the options flow handler."""
         return AllegroOptionsFlowHandler()
 
-    async def _validate(self, email: str, password: str) -> None:
-        """Validate credentials against the live API.
-
-        Uses the HA-managed session: this is a one-shot check, so it does not
-        need the per-entry cookie jar that ``__init__.py`` sets up.
-        """
-        client = AllegroApiClient(email, password, async_get_clientsession(self.hass))
-        await client.async_login()
+    async def _login(self, user_input: dict[str, Any], errors: dict[str, str]):
+        """Return ``(cookie, login)``, or ``None`` with ``errors`` filled in."""
+        cookie = _clean_cookie(user_input[CONF_COOKIE])
+        client = AllegroClient(cookie, async_get_clientsession(self.hass))
+        try:
+            return cookie, await client.async_get_login()
+        except AllegroAuthError:
+            errors["base"] = "invalid_auth"
+        except (AllegroApiError, aiohttp.ClientError):
+            errors["base"] = "cannot_connect"
+        return None
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Show the credential form and validate on submit."""
+        """Ask for the cookie and validate it on submit."""
         errors: dict[str, str] = {}
-
-        if user_input is not None:
-            email = user_input[CONF_EMAIL]
-            try:
-                await self._validate(email, user_input[CONF_PASSWORD])
-            except AllegroAuthError:
-                errors["base"] = "invalid_auth"
-            except (AllegroApiError, aiohttp.ClientError):
-                errors["base"] = "cannot_connect"
-            else:
-                await self.async_set_unique_id(email)
-                self._abort_if_unique_id_configured()
-                return self.async_create_entry(
-                    title=email,
-                    data=dict(user_input),
-                    options={
-                        CONF_DELIVERED_FILTER_TYPE: DEFAULT_DELIVERED_FILTER_TYPE,
-                        CONF_DELIVERED_FILTER_AMOUNT: DEFAULT_DELIVERED_FILTER_AMOUNT,
-                        CONF_INCLUDE_HISTORY: DEFAULT_INCLUDE_HISTORY,
-                    },
-                )
-
+        if user_input is not None and (result := await self._login(user_input, errors)):
+            cookie, login = result
+            await self.async_set_unique_id(login)
+            self._abort_if_unique_id_configured()
+            return self.async_create_entry(
+                title=login,
+                data={CONF_COOKIE: cookie},
+                options={
+                    CONF_DELIVERED_FILTER_TYPE: DEFAULT_DELIVERED_FILTER_TYPE,
+                    CONF_DELIVERED_FILTER_AMOUNT: DEFAULT_DELIVERED_FILTER_AMOUNT,
+                    CONF_HAND_OFF: DEFAULT_HAND_OFF,
+                },
+            )
         return self.async_show_form(
-            step_id="user", data_schema=_USER_SCHEMA, errors=errors
+            step_id="user", data_schema=_COOKIE_SCHEMA, errors=errors
         )
 
     async def async_step_reauth(
         self, entry_data: Mapping[str, Any]
     ) -> ConfigFlowResult:
-        """Start reauth after the credentials stopped working."""
+        """Start reauth after the cookie stopped working."""
         return await self.async_step_reauth_confirm()
 
     async def async_step_reauth_confirm(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Ask for fresh credentials and update the existing entry."""
+        """Ask for a fresh cookie and update the existing entry."""
         errors: dict[str, str] = {}
-
-        if user_input is not None:
-            email = user_input[CONF_EMAIL]
-            try:
-                await self._validate(email, user_input[CONF_PASSWORD])
-            except AllegroAuthError:
-                errors["base"] = "invalid_auth"
-            except (AllegroApiError, aiohttp.ClientError):
-                errors["base"] = "cannot_connect"
-            else:
-                # Entering *another* account's credentials must abort rather
-                # than silently rebind this entry to a different account.
-                await self.async_set_unique_id(email)
-                self._abort_if_unique_id_mismatch(reason="wrong_account")
-                return self.async_update_reload_and_abort(
-                    self._get_reauth_entry(), data_updates=dict(user_input)
-                )
-
+        if user_input is not None and (result := await self._login(user_input, errors)):
+            cookie, login = result
+            # Another account's cookie must abort, not rebind this entry.
+            await self.async_set_unique_id(login)
+            self._abort_if_unique_id_mismatch(reason="wrong_account")
+            return self.async_update_reload_and_abort(
+                self._get_reauth_entry(), data_updates={CONF_COOKIE: cookie}
+            )
         return self.async_show_form(
-            step_id="reauth_confirm", data_schema=_USER_SCHEMA, errors=errors
+            step_id="reauth_confirm", data_schema=_COOKIE_SCHEMA, errors=errors
         )
 
 
 class AllegroOptionsFlowHandler(OptionsFlowWithReload):
-    """Manage delivered retention, history and polling in one sectioned form."""
+    """Manage delivered retention and hand-off in one sectioned form."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -136,7 +135,6 @@ class AllegroOptionsFlowHandler(OptionsFlowWithReload):
         """Show and handle the single sectioned options form."""
         if user_input is not None:
             delivered = user_input["delivered"]
-            history = user_input["history"]
             # OptionsFlowWithReload reloads once the new options are saved; a
             # reload scheduled here would start before that, on the old ones.
             return self.async_create_entry(
@@ -146,7 +144,7 @@ class AllegroOptionsFlowHandler(OptionsFlowWithReload):
                     CONF_DELIVERED_FILTER_AMOUNT: int(
                         delivered[CONF_DELIVERED_FILTER_AMOUNT]
                     ),
-                    CONF_INCLUDE_HISTORY: bool(history[CONF_INCLUDE_HISTORY]),
+                    CONF_HAND_OFF: bool(user_input["hand_off"][CONF_HAND_OFF]),
                 },
             )
 
@@ -187,20 +185,17 @@ class AllegroOptionsFlowHandler(OptionsFlowWithReload):
                     ),
                     {"collapsed": False},
                 ),
-                vol.Required("history"): section(
+                vol.Required("hand_off"): section(
                     vol.Schema(
                         {
                             vol.Required(
-                                CONF_INCLUDE_HISTORY,
-                                default=current.get(
-                                    CONF_INCLUDE_HISTORY, DEFAULT_INCLUDE_HISTORY
-                                ),
+                                CONF_HAND_OFF,
+                                default=current.get(CONF_HAND_OFF, DEFAULT_HAND_OFF),
                             ): selector.BooleanSelector(),
                         }
                     ),
-                    {"collapsed": True},
+                    {"collapsed": False},
                 ),
             }
         )
-
         return self.async_show_form(step_id="init", data_schema=schema)

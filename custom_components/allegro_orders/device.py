@@ -13,8 +13,8 @@ from homeassistant.helpers.entity import DeviceInfo
 
 from .const import DOMAIN
 
-# TODO(carrier): point this at the carrier's own site.
-CONFIGURATION_URL = "https://example-carrier.test"
+# Where the buyer sees the same parcels.
+CONFIGURATION_URL = "https://allegro.pl/moje-allegro/zakupy/kupione"
 
 ATTRIBUTION = "Data provided by Allegro"
 

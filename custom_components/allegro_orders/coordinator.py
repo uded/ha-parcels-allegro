@@ -1,7 +1,7 @@
 """Coordinator for the Allegro parcel tracker integration.
 
-Fetching and event firing only — the parcel mapping lives in :mod:`.parcels`,
-shared verbatim with the account-less variant.
+Fetching and event firing only — the Allegro mapping lives in
+:mod:`.account.parcels`.
 """
 
 from __future__ import annotations
@@ -17,10 +17,10 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from .api import AllegroApiClient, AllegroApiError, AllegroAuthError
+from .account.client import AllegroClient
+from .account.errors import AllegroApiError, AllegroAuthError
+from .account.parcels import normalize_parcel
 from .const import (
-    CONF_INCLUDE_HISTORY,
-    DEFAULT_INCLUDE_HISTORY,
     DOMAIN,
     HOT_INTERVAL_MINUTES,
     HOT_LOOKAHEAD_HOURS,
@@ -31,7 +31,7 @@ from .const import (
     ParcelStatus,
 )
 from .contents import ContentsStore, normalize_code
-from .parcels import apply_delivered_filter, normalize_parcel, sort_parcels_by_ts
+from .parcels import apply_delivered_filter, sort_parcels_by_ts
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -118,7 +118,7 @@ class AllegroCoordinator(DataUpdateCoordinator[list[dict]]):
     def __init__(
         self,
         hass: HomeAssistant,
-        client: AllegroApiClient,
+        client: AllegroClient,
         entry: ConfigEntry,
     ) -> None:
         """Initialise the coordinator."""
@@ -193,13 +193,6 @@ class AllegroCoordinator(DataUpdateCoordinator[list[dict]]):
             self._cached_device_id = device.id
         return self._cached_device_id
 
-    @property
-    def _include_history(self) -> bool:
-        """Whether the opt-in per-parcel history option is enabled."""
-        return bool(
-            self.config_entry.options.get(CONF_INCLUDE_HISTORY, DEFAULT_INCLUDE_HISTORY)
-        )
-
     async def _async_update_data(self) -> list[dict]:
         try:
             return await self._async_poll()
@@ -239,11 +232,7 @@ class AllegroCoordinator(DataUpdateCoordinator[list[dict]]):
             ) from err
         self._consecutive_429 = 0
 
-        include_history = self._include_history
-        normalized = [
-            self._apply_contents(normalize_parcel(raw, include_history=include_history))
-            for raw in raws
-        ]
+        normalized = [self._apply_contents(normalize_parcel(raw)) for raw in raws]
         active = [parcel for parcel in normalized if not parcel["delivered"]]
         delivered = [parcel for parcel in normalized if parcel["delivered"]]
 

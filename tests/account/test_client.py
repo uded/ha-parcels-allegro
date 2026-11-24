@@ -63,6 +63,15 @@ async def test_get_packages(client, aioclient_mock):
     assert packages[0]["delivery"]["carrierId"] == "ALLEGRO"
 
 
+async def test_get_parcels_joins_orders_and_packages(client, aioclient_mock):
+    aioclient_mock.get(ORDERS_URL, json=_fixture("myorders"), headers=JSON)
+    aioclient_mock.get(PACKAGES_URL, json=_fixture("packages"), headers=JSON)
+    raws = await client.async_get_parcels()
+    assert len(raws) == 24
+    assert sum(raw["package"] is not None for raw in raws) == 5
+    assert set(raws[0]) == {"waybill", "carrier_id", "order", "package"}
+
+
 async def test_requests_send_cookie_accept_and_referer(client, aioclient_mock):
     aioclient_mock.get(USERS_URL, json=_fixture("users"), headers=JSON)
     aioclient_mock.get(ORDERS_URL, json=_fixture("myorders"), headers=JSON)
