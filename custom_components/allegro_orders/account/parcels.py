@@ -110,6 +110,21 @@ def _carrier(raw: dict[str, Any]) -> str:
     return name
 
 
+def gls_with_check_digit(number: str) -> str:
+    """GLS's 12-digit parcel number from the 11 digits Allegro shows.
+
+    GLS check digit: weights 3,1,3,… from the right, plus 1, modulo 10.
+    Anything that is not exactly 11 digits is returned unchanged.
+    """
+    if len(number) != 11 or not number.isdigit():
+        return number
+    total = sum(
+        int(digit) * (3 if index % 2 == 0 else 1)
+        for index, digit in enumerate(reversed(number))
+    )
+    return number + str((10 - (total + 1) % 10) % 10)
+
+
 def hand_off_domain(parcel: dict[str, Any]) -> str | None:
     """Domain of the suite integration that can track this parcel's number, if any.
 
@@ -189,14 +204,15 @@ def normalize_parcel(raw: dict[str, Any], *, include_history: bool = False) -> d
     waybill = raw["waybill"]
     delivery = _dict(order.get("delivery"))
     status, code = _status(raw)
+    carrier = _carrier(raw)
     delivered = status is ParcelStatus.DELIVERED
     point = _dict(delivery.get("generalDelivery"))
     pickup = is_pickup(bool(point), status)
     entry = next((w for w in _waybills(order) if w.get("waybillId") == waybill), {})
 
     return {
-        "carrier": _carrier(raw),
-        "barcode": waybill,
+        "carrier": carrier,
+        "barcode": gls_with_check_digit(waybill) if carrier == "GLS" else waybill,
         "sender": _dict(order.get("seller")).get("login") or None,
         "receiver": None,
         "contents": _contents(order, package),

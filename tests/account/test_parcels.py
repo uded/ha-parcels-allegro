@@ -180,6 +180,26 @@ def test_courier_waybill_is_handed_off():
     assert hand_off_domain(parcel) == "dpd"
 
 
+def test_gls_number_gets_its_check_digit():
+    """Allegro lists GLS's 11-digit number; GLS itself uses 12 (check digit).
+
+    Same number on both sides, or the aggregator and cards cannot dedupe.
+    """
+    order = _order("Delivery by GLS", "IN_TRANSIT")
+    order["delivery"]["waybillsData"]["waybills"][0]["waybillId"] = "12345678901"
+    package = _package_for("12345678901")
+    package["delivery"]["carrierId"] = "GLS"
+    parcel = _one([order], [package])
+    assert parcel["barcode"] == "123456789011"
+    assert parcel["status"] is ParcelStatus.IN_TRANSIT  # still joined to its package
+
+
+def test_gls_number_with_check_digit_is_kept():
+    order = _order("Delivery by GLS", "IN_TRANSIT")
+    order["delivery"]["waybillsData"]["waybills"][0]["waybillId"] = "123456789011"
+    assert _one([order])["barcode"] == "123456789011"
+
+
 def test_pocztex_is_poczta_polska():
     order = _order("Delivery by Allegro One", "IN_TRANSIT")
     order["delivery"]["deliveredBy"] = "Delivery by Pocztex"
