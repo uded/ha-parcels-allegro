@@ -64,6 +64,8 @@ DELIVERED_BY: dict[str, str] = {
     "InPost": "INPOST",
     "ORLEN Paczka": "ORLEN",
     "Poczta Polska": "POCZTA_POLSKA",
+    # Poczta Polska's courier brand.
+    "Pocztex": "POCZTA_POLSKA",
 }
 
 # Every optional key the parcel contract defines. CAPABILITIES below must be a

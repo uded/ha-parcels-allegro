@@ -168,6 +168,14 @@ def test_carrier_from_delivered_by(delivered_by, carrier, domain):
     assert hand_off_domain(parcel) == domain
 
 
+def test_pocztex_is_poczta_polska():
+    order = _order("Delivery by Allegro One", "IN_TRANSIT")
+    order["delivery"]["deliveredBy"] = "Delivery by Pocztex"
+    parcel = _one([order])
+    assert parcel["carrier"] == "Poczta Polska"
+    assert hand_off_domain(parcel) == "poczta_polska"
+
+
 def test_delivered_by_wins_over_package_carrier_id():
     order = _order("Delivery by DPD", "DELIVERED")
     package = _package_for(_waybill(order))  # carrierId "ALLEGRO"
