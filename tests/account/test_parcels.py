@@ -154,9 +154,9 @@ def test_cancelled_orders_are_dropped():
     ("delivered_by", "carrier", "domain"),
     [
         ("Delivery by Allegro One", "Allegro One", None),
-        # Allegro Delivery (AD): Allegro's own 17-char number, not trackable by
-        # the courier's integration, so never handed off.
-        ("Delivery by DPD", "DPD Polska", None),
+        # Allegro Delivery (AD): Allegro numbers. DPD takes them as is (user
+        # confirmed); ORLEN numbers only Allegro can track.
+        ("Delivery by DPD", "DPD Polska", "dpd"),
         ("Delivery by ORLEN Paczka", "ORLEN Paczka", None),
         # Seller's own courier contract: the courier's waybill.
         ("Delivery by GLS", "GLS", "gls"),

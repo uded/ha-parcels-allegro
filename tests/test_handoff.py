@@ -27,14 +27,23 @@ def _courier(code: str = ACTIVE_CODE, delivered_by: str = "Delivery by DPD") -> 
     return sample
 
 
-async def test_allegro_delivery_number_never_handed_off(hass):
-    """'Allegro Kurier DPD (AD)': Allegro's own number, DPD cannot track it."""
+async def test_orlen_allegro_number_never_handed_off(hass):
+    """'Allegro Automat ORLEN Paczka': only Allegro can track that number."""
+    calls = _register(hass, "orlen_paczka")
+    sample = active_sample()
+    sample["order"]["delivery"]["deliveredBy"] = "Delivery by ORLEN Paczka"
+    await _setup(hass, [sample])
+    assert calls == []
+    assert not ir.async_get(hass).issues
+
+
+async def test_dpd_allegro_number_is_handed_off(hass):
+    """'Allegro Kurier DPD (AD)': the AD… number is handed to DPD as is."""
     calls = _register(hass, "dpd")
     sample = active_sample()
     sample["order"]["delivery"]["deliveredBy"] = "Delivery by DPD"
     await _setup(hass, [sample])
-    assert calls == []
-    assert not ir.async_get(hass).issues
+    assert [call["tracking_code"] for call in calls] == [ACTIVE_CODE]
 
 
 def _register(hass, domain: str, *, contents: bool = True) -> list[dict]:

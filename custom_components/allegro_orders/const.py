@@ -54,6 +54,11 @@ ALLEGRO_CARRIERS: dict[str, tuple[str, str | None]] = {
     "POCZTA_POLSKA": ("Poczta Polska", "poczta_polska"),
 }
 
+# Suite domains whose track_parcel takes an Allegro Delivery number (the
+# 17-character "AD…" waybill of e.g. "Allegro Kurier DPD (AD)"). ORLEN Paczka's
+# Allegro numbers are trackable only on Allegro, so it is not here.
+ACCEPTS_ALLEGRO_NUMBERS: frozenset[str] = frozenset({"dpd"})
+
 # Courier named in an order's `delivery.deliveredBy` ("Delivery by DPD") →
 # ALLEGRO_CARRIERS key. Preferred over carrierId, which may say ALLEGRO for any
 # courier Allegro Delivery contracts (e.g. "Allegro Kurier DPD (AD)").

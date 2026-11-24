@@ -9,7 +9,13 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from ..const import ALLEGRO_CARRIERS, DELIVERED_BY, STATUS_MAP, ParcelStatus
+from ..const import (
+    ACCEPTS_ALLEGRO_NUMBERS,
+    ALLEGRO_CARRIERS,
+    DELIVERED_BY,
+    STATUS_MAP,
+    ParcelStatus,
+)
 from ..contents import clean_contents, join_contents
 from ..parcels import NEW_ISSUE_URL, is_pickup
 
@@ -107,12 +113,16 @@ def _carrier(raw: dict[str, Any]) -> str:
 def hand_off_domain(parcel: dict[str, Any]) -> str | None:
     """Domain of the suite integration that can track this parcel's number, if any.
 
-    Allegro Delivery waybills (e.g. "Allegro Automat ORLEN Paczka") are
-    Allegro's own numbers that only Allegro can track; never hand those off.
+    Allegro Delivery waybills are Allegro's own numbers; only couriers in
+    ACCEPTS_ALLEGRO_NUMBERS track them (DPD does, ORLEN Paczka does not).
     """
-    if _dict(parcel.get("raw")).get("allegro_number"):
+    domain = _DOMAIN_BY_CARRIER.get(parcel.get("carrier") or "")
+    if (
+        _dict(parcel.get("raw")).get("allegro_number")
+        and domain not in ACCEPTS_ALLEGRO_NUMBERS
+    ):
         return None
-    return _DOMAIN_BY_CARRIER.get(parcel.get("carrier") or "")
+    return domain
 
 
 def _status(raw: dict[str, Any]) -> tuple[ParcelStatus, str | None]:

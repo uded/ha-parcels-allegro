@@ -81,7 +81,8 @@ Allegro knows what you bought; the courier knows where the parcel is. When a par
 Example: you bought something that ships with DPD and you already run the DPD integration. Allegro lists the parcel as `carrier: DPD Polska` and hands its number to DPD, which starts tracking it too. The [Parcel Aggregator](https://github.com/ha-parcel-integrations/ha-parcel-aggregator) shows it once: it treats Allegro as a shop and keeps the courier's record, with the item name from Allegro. The per-integration sensors still count it in both.
 
 - **Allegro One** parcels are never handed off; Allegro is their only source.
-- **Allegro-numbered parcels** (Allegro Delivery services such as "Allegro Automat ORLEN Paczka") are never handed off either: only Allegro can track that number. Only a waybill issued by the courier itself goes to the courier's integration.
+- **Allegro Delivery numbers** (17 characters, starting `AD`): "Allegro Kurier DPD (AD)" parcels are handed to DPD with that number. "Allegro Automat ORLEN Paczka" numbers are trackable only on Allegro, so they stay here.
+- If the DPD integration already lists the same parcel from your DPD account under DPD's own number, the aggregator can show it twice: nothing in Allegro's data links the two numbers yet.
 - A courier without a suite integration (for example Raben) stays here only.
 - If the courier's integration is not installed, a Repair issue suggests it. Turn the option off to stop hand-offs and the issue.
 
