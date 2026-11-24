@@ -4,14 +4,14 @@
     "step": {
       "user": {
         "title": "Konfiguracja Allegro",
-        "description": "Allegro nie udostępnia logowania dla aplikacji, więc używana jest sesja z przeglądarki. Na allegro.pl (zalogowany) otwórz narzędzia deweloperskie (F12) → Aplikacja (Chrome) lub Dane (Firefox) → Ciasteczka → https://allegro.pl i skopiuj wartość QXLSESSID.",
+        "description": "Allegro nie udostępnia logowania dla aplikacji, więc używana jest sesja z przeglądarki. Na allegro.pl (zalogowany) otwórz narzędzia deweloperskie (F12) → Aplikacja (Chrome) lub Dane (Firefox) → Ciasteczka → allegro.pl i skopiuj wartość QXLSESSID.",
         "data": {
           "cookie": "Ciasteczko QXLSESSID"
         }
       },
       "reauth_confirm": {
         "title": "Sesja Allegro wygasła",
-        "description": "Allegro nie akceptuje już zapisanego ciasteczka. Allegro nie udostępnia logowania dla aplikacji, więc używana jest sesja z przeglądarki. Na allegro.pl (zalogowany) otwórz narzędzia deweloperskie (F12) → Aplikacja (Chrome) lub Dane (Firefox) → Ciasteczka → https://allegro.pl i skopiuj wartość QXLSESSID.",
+        "description": "Allegro nie akceptuje już zapisanego ciasteczka. Allegro nie udostępnia logowania dla aplikacji, więc używana jest sesja z przeglądarki. Na allegro.pl (zalogowany) otwórz narzędzia deweloperskie (F12) → Aplikacja (Chrome) lub Dane (Firefox) → Ciasteczka → allegro.pl i skopiuj wartość QXLSESSID.",
         "data": {
           "cookie": "Ciasteczko QXLSESSID"
         }

@@ -4,14 +4,14 @@
     "step": {
       "user": {
         "title": "Set up Allegro",
-        "description": "Allegro has no sign-in for apps, so this uses your browser's session. On allegro.pl, signed in, open the developer tools (F12) → Application (Chrome) or Storage (Firefox) → Cookies → https://allegro.pl, and copy the value of QXLSESSID.",
+        "description": "Allegro has no sign-in for apps, so this uses your browser's session. On allegro.pl, signed in, open the developer tools (F12) → Application (Chrome) or Storage (Firefox) → Cookies → allegro.pl, and copy the value of QXLSESSID.",
         "data": {
           "cookie": "QXLSESSID cookie"
         }
       },
       "reauth_confirm": {
         "title": "Allegro session expired",
-        "description": "Allegro no longer accepts the stored session cookie. Allegro has no sign-in for apps, so this uses your browser's session. On allegro.pl, signed in, open the developer tools (F12) → Application (Chrome) or Storage (Firefox) → Cookies → https://allegro.pl, and copy the value of QXLSESSID.",
+        "description": "Allegro no longer accepts the stored session cookie. Allegro has no sign-in for apps, so this uses your browser's session. On allegro.pl, signed in, open the developer tools (F12) → Application (Chrome) or Storage (Firefox) → Cookies → allegro.pl, and copy the value of QXLSESSID.",
         "data": {
           "cookie": "QXLSESSID cookie"
         }
