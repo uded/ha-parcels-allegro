@@ -138,7 +138,11 @@ class HandOff:
         ignored it would be nagged again by the next such parcel.
         """
         for domain, name in _COURIERS.items():
-            if self._hass.services.has_service(domain, SERVICE_TRACK_PARCEL):
+            # Set up in any form counts: an account-only entry (myGLS, InPost
+            # account) lists the parcels itself and registers no track_parcel.
+            if self._hass.services.has_service(
+                domain, SERVICE_TRACK_PARCEL
+            ) or self._hass.config_entries.async_entries(domain):
                 ir.async_delete_issue(self._hass, DOMAIN, issue_id(domain))
             elif domain in needed:
                 url = f"{DOCS_CARRIERS_URL}#{domain.replace('_', '-')}"

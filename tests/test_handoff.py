@@ -147,6 +147,13 @@ async def test_missing_courier_integration_raises_repair_issue(hass):
     assert issue.translation_placeholders["carrier"] == "DPD Polska"
 
 
+async def test_courier_account_entry_without_track_parcel_raises_no_issue(hass):
+    """ha-gls with only an account login lists the parcels itself, no track_parcel."""
+    MockConfigEntry(domain="gls", title="myGLS").add_to_hass(hass)
+    await _setup(hass, [_courier(delivered_by="Delivery by GLS")])
+    assert ir.async_get(hass).async_get_issue(DOMAIN, issue_id("gls")) is None
+
+
 async def test_issue_cleared_when_integration_installed(hass):
     entry, fetch = await _setup(hass, [_courier()])
     calls = _register(hass, "dpd")
