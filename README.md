@@ -1,17 +1,12 @@
 # Allegro Parcel Tracker
 
 [![Release](https://img.shields.io/github/v/release/uded/ha-parcels-allegro.svg)](https://github.com/uded/ha-parcels-allegro/releases)
-[![Downloads](https://img.shields.io/github/downloads/uded/ha-parcels-allegro/total.svg)](https://github.com/uded/ha-parcels-allegro/releases)
 [![Marketplace](https://img.shields.io/badge/Marketplace-Custom-41BDF5.svg)](https://hacs.xyz)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> 📦 Part of [**ha-parcel-integrations**](https://ha-parcel-integrations.github.io/), a family of package-tracking integrations for Home Assistant that all publish the same parcel format, statuses and events, so they plug into cross-carrier automations and the optional [Parcel Aggregator](https://github.com/ha-parcel-integrations/ha-parcel-aggregator). Browse the other carriers on the website.
->
-> 💬 Questions or feedback? Join the discussion on the [Home Assistant community](https://community.home-assistant.io/t/packages-postnl-dhl-nl-dpd-and-gls-parcel-integration/112433/).
+> 📦 Follows the [**ha-parcel-integrations**](https://ha-parcel-integrations.github.io/) parcel contract: the same parcel format, statuses and events as the suite's couriers, so Allegro parcels plug into cross-carrier automations and the [Parcel Aggregator](https://github.com/ha-parcel-integrations/ha-parcel-aggregator).
 
-<!-- TODO(carrier): rewrite this paragraph, the Requirements and the Disclaimer for the real carrier — country, what a user needs, and whether an account is involved. -->
-
-A custom Home Assistant integration that tracks your [Allegro](https://example-carrier.test) parcels. Sign in with your own Allegro account and every parcel it already knows about is imported automatically.
+A custom Home Assistant integration that tracks the parcels of things you **bought** on [Allegro](https://allegro.pl). Every shipment of your recent purchases shows up automatically, with the real courier, the item name and the seller. Only parcels: no cart, messages or offers.
 
 ## Contents
 
@@ -20,48 +15,38 @@ A custom Home Assistant integration that tracks your [Allegro](https://example-c
 - [Installation](#installation)
 - [Configuration](#configuration)
 - [Options](#options)
-- [Removal](#removal)
+- [Hand-off to courier integrations](#hand-off-to-courier-integrations)
 - [Sensors](#sensors)
 - [Parcel status reference](#parcel-status-reference)
 - [Events](#events)
 - [Services](#services)
-- [Examples](#examples)
+- [Known limits](#known-limits)
 - [Debugging](#debugging)
 - [Troubleshooting](#troubleshooting)
-- [Related integrations](#related-integrations)
 - [Disclaimer](#disclaimer)
-- [Contributing](#contributing)
 - [License](#license)
 
 ## Features
 
-- Auto-imports every parcel your Allegro account already knows about — no per-parcel setup
-- Per-parcel sensor with the canonical status (`registered` / `in_transit` / `out_for_delivery` / `delivered` / …), the carrier's own status text, the expected delivery window and a tracking deep-link
-- Summary sensors: incoming parcels, next delivery, recently delivered parcels
-- Read-only **Deliveries** calendar with the expected delivery windows
-- `allegro_orders.track_parcel` / `allegro_orders.untrack_parcel` services, so a dashboard button can add a parcel
-- A `contents` field on every parcel, set in your own words with the `allegro_orders.update_contents` service
-- Events + device triggers for no-code automations (parcel registered, status changed, delivered, delivery time changed)
-- Opt-in per-parcel status history
-- Manual refresh button and a diagnostic last-update sensor
+- Imports every parcel of your recent Allegro purchases; no per-parcel setup
+- The real courier as `carrier` (`Allegro One`, `DPD Polska`, `InPost`, `GLS`, `ORLEN Paczka`, `Poczta Polska`, …), the item names as `contents`, the seller as `sender`
+- Allegro One (Box and Kurier) parcels, which no other integration covers
+- Per-parcel sensor with the canonical status and Allegro's own status code, pickup point and tracking link
+- Summary sensors: incoming parcels, awaiting pickup, recently delivered
+- Events and device triggers for no-code automations
+- Optional hand-off to the suite's courier integrations (see below)
+- A `contents` field you can override with the `allegro_orders.update_contents` service
 
 ## Requirements
 
 - Home Assistant 2025.12 or newer
-- An Allegro account (the same one you use on the Allegro
-  website or app)
+- An Allegro buyer account, signed in on allegro.pl in a browser
 
 ## Installation
 
 ### Marketplace (recommended)
 
-Click the button below to open this repository in the Marketplace, then install **Allegro**:
-
-[![Open your Home Assistant instance and open a repository inside the Marketplace.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=ha-parcel-integrations&repository=ha-parcels-allegro&category=integration)
-
-Or add it by hand: in the Marketplace, choose the three-dot menu → **Custom repositories**, add `https://github.com/uded/ha-parcels-allegro` as an **Integration** and install **Allegro**.
-
-Restart Home Assistant if it asks you to.
+In the Marketplace, choose the three-dot menu → **Custom repositories**, add `https://github.com/uded/ha-parcels-allegro` as an **Integration** and install **Allegro**. Restart Home Assistant.
 
 ### Manual
 
@@ -69,11 +54,14 @@ Copy `custom_components/allegro_orders` into your `config/custom_components/` fo
 
 ## Configuration
 
-[![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=allegro_orders)
+Allegro offers no sign-in for apps and no buyer API, so the integration uses your browser session cookie, `QXLSESSID`:
 
-Add the integration via **Settings → Devices & Services → Add Integration → Allegro** and sign in with your Allegro account email and password.
+1. Open [allegro.pl](https://allegro.pl) in a browser and sign in.
+2. Open the developer tools (F12) → **Application** (Chrome, Edge) or **Storage** (Firefox) → **Cookies** → `https://allegro.pl`.
+3. Copy the value of `QXLSESSID`.
+4. In Home Assistant: **Settings → Devices & Services → Add Integration → Allegro**, paste the value.
 
-Then add parcels via the integration's **Configure** dialog, the [`allegro_orders.track_parcel`](#services) service, or a [dashboard button](examples/dashboards/add_parcel_card.yaml). The tracking code is on your shipping confirmation email or the missed-delivery card.
+When the cookie expires, Home Assistant asks you for a new one (a re-authentication notice); repeat the steps above. Treat the cookie like a password: it gives access to your Allegro account.
 
 ## Options
 
@@ -81,103 +69,72 @@ Open **Configure** on the integration entry:
 
 | Section | Option | Default | Description |
 |---|---|---|---|
-| Parcels | Add / remove | — | Manage the tracked tracking codes. Changes apply immediately, no restart. |
-| Delivered parcels | Filter by / amount | last 7 days | How long delivered parcels stay visible on the delivered sensor. |
-| Parcel history | Include status history | off | Adds a `history` attribute per parcel with each status update. |
+| Delivered parcels | Filter by / amount | last 7 days | How long delivered parcels stay on the delivered sensor. |
+| Courier integrations | Hand parcels to courier integrations | on | See below. |
 
-Polling isn't one of these settings: the integration polls on a dynamic,
-status-driven schedule with nothing to configure.
+Polling is automatic: no polling between 00:00 and 06:00 apart from one check at each end, every 15 minutes while a parcel is out for delivery, every 45 minutes otherwise. Each poll makes two requests to Allegro.
 
-## Dynamic polling
+## Hand-off to courier integrations
 
-Polling isn't a setting here — the integration adjusts its own cadence to
-what your tracked parcels are actually doing:
+Allegro knows what you bought; the courier knows where the parcel is. When a parcel travels with a courier that has its own suite integration (InPost, DPD, GLS, ORLEN Paczka, Poczta Polska), this integration calls that courier's `track_parcel` once with the waybill and, where the courier accepts it, the item name. The courier integration then adds its delivery window and history.
 
-- **Quiet hours** — no polling between 00:00–06:00 local time, aside from one
-  catch-up check at each end of that window (around midnight and around 6
-  AM), so an overnight update is never missed.
-- **Hot (every 15 minutes)** — while any tracked parcel is out for delivery
-  today, starting an hour before its delivery window opens (or immediately if
-  no window is known yet).
-- **Normal (every 45 minutes)** — for anything else still on its way.
-- **Never fully stops** — with nothing hot or in transit, polling keeps
-  running at the normal cadence, since that's also how a new shipment on your
-  account gets discovered.
-- A small, fixed per-hub offset is added on top, so not every Allegro
-  hub out there polls at exactly the same second.
+Example: you bought something that ships with DPD and you already run the DPD integration. Allegro lists the parcel as `carrier: DPD Polska` and hands its number to DPD, which starts tracking it too. The [Parcel Aggregator](https://github.com/ha-parcel-integrations/ha-parcel-aggregator) shows it once: it treats Allegro as a shop and keeps the courier's record, with the item name from Allegro. The per-integration sensors still count it in both.
 
-<!-- TODO(carrier): if this carrier's polling diverges from the schedule above (e.g. no delivery window at all, so it always falls into the hot-tier fallback), say so explicitly here — see CLAUDE.md's "Dynamic polling" section for this carrier's specifics. -->
-
-## Removal
-
-Standard HA removal applies: **Settings → Devices & Services → Allegro → ⋮ → Delete**. Nothing is stored on Allegro's side.
+- **Allegro One** parcels are never handed off; Allegro is their only source.
+- A courier without a suite integration (for example Raben) stays here only.
+- If the courier's integration is not installed, a Repair issue suggests it. Turn the option off to stop hand-offs and the issue.
 
 ## Sensors
 
 | Entity | Description |
 |---|---|
-| `sensor.allegro_orders_incoming_parcels` | Number of active tracked parcels, full list under the `parcels` attribute |
-| `sensor.allegro_orders_parcel_<code>` | One per tracked parcel; state is the canonical status, attributes carry the full normalised parcel |
-| `sensor.allegro_orders_next_delivery` | Earliest expected delivery moment across all active parcels |
-| `sensor.allegro_orders_en_route_to_pickup_point` | Incoming parcels on their way to a pickup point that have not arrived yet |
-| `sensor.allegro_orders_awaiting_pickup` | Incoming parcels that are ready to collect at a pickup point |
-| `sensor.allegro_orders_delivered_parcels` | Recently delivered parcels (see the retention option) |
-| `calendar.allegro_orders_deliveries` | Read-only calendar of expected deliveries, no extra API calls |
-| `sensor.allegro_orders_last_successful_update` | Diagnostic: when Allegro was last polled successfully |
-
-A delivered parcel moves from its per-parcel sensor to the delivered sensor automatically.
+| `sensor.allegro_<login>_incoming_parcels` | Number of active parcels, full list under the `parcels` attribute |
+| `sensor.allegro_<login>_parcel_<code>` | One per active parcel; state is the canonical status |
+| `sensor.allegro_<login>_next_delivery` | Earliest expected delivery (empty: Allegro gives no structured ETA) |
+| `sensor.allegro_<login>_en_route_to_pickup_point` | Parcels on their way to a pickup point |
+| `sensor.allegro_<login>_awaiting_pickup` | Parcels ready to collect |
+| `sensor.allegro_<login>_delivered_parcels` | Recently delivered parcels (see the retention option) |
+| `calendar.allegro_<login>_deliveries` | Calendar of expected deliveries |
+| `sensor.allegro_<login>_last_successful_update` | Diagnostic: last successful poll |
 
 ## Parcel status reference
 
-The `status` field is the carrier-agnostic enum shared by the whole integration family:
-
-<!-- TODO(carrier): trim this table to the statuses this carrier can actually
-     report — listing states that never occur just confuses users. -->
-
-| Status | Meaning |
+| Status | Allegro code |
 |---|---|
-| `registered` | Announced / received by Allegro |
-| `in_transit` | In the sorting network |
-| `out_for_delivery` | With the courier today |
-| `at_pickup_point` | Waiting for you at a pickup location |
-| `delivered` | Delivered |
-| `returning` | Going back to the sender |
-| `problem` | Allegro reports an exception |
-| `unknown` | Not yet scanned, or a status we have not mapped yet |
+| `registered` | a waybill exists, no live status yet |
+| `in_transit` | `IN_TRANSIT` |
+| `out_for_delivery` | `IN_DELIVERY` |
+| `at_pickup_point` | `AVAILABLE_FOR_PICKUP` |
+| `delivered` | `DELIVERED` |
+| `returning` | `RETURNED`, `RETURNED_TO_SENDER` (failed delivery going back) |
+| `unknown` | a code not mapped yet (logged once, please report it) |
 
-The carrier's own human-readable text is always available as `raw_status`.
+Cancelled orders are not parcels. Allegro's own code is always in `raw_status`.
 
 ## Events
 
-The integration fires these on the event bus (also available as device triggers on the Allegro device):
-
 | Event | When |
 |---|---|
-| `allegro_orders_parcel_registered` | A new parcel appears in the active list |
-| `allegro_orders_parcel_status_changed` | A parcel's canonical status changes (`old_status` / `new_status` in the payload), except the final hop to delivered |
+| `allegro_orders_parcel_registered` | A new parcel appears |
+| `allegro_orders_parcel_status_changed` | A parcel's canonical status changes |
 | `allegro_orders_parcel_delivered` | A parcel is delivered |
-| `allegro_orders_parcel_delivery_time_changed` | The expected delivery window changes |
+| `allegro_orders_parcel_delivery_time_changed` | The delivery window changes (not fired today: no ETA source) |
 
-Every payload is the full normalised parcel plus the hub's `device_id`. Events are suppressed on the first refresh after start-up.
+Every payload is the full parcel plus the hub's `device_id`. Events are suppressed on the first refresh after start-up.
 
 ## Services
 
 | Service | Fields | Description |
 |---|---|---|
-| `allegro_orders.track_parcel` | `tracking_code`, `contents` (optional) | Start tracking a parcel, optionally noting what is in it |
-| `allegro_orders.untrack_parcel` | `tracking_code` | Stop tracking a parcel |
-| `allegro_orders.update_contents` | `tracking_code`, `contents` | Set what is in a parcel, tracked or not; an empty `contents` clears it. With several accounts it goes to every account that lists the code; name one with the optional `config_entry_id` (needed for a code no account lists yet) |
+| `allegro_orders.update_contents` | `tracking_code`, `contents` | Override what is in a parcel; an empty `contents` returns to Allegro's item name. |
 
-## Examples
+## Known limits
 
-Ready-to-paste automations and dashboard snippets live in [`examples/`](examples/), including tracking a new parcel straight from a dashboard.
-
-### Community Lovelace cards
-
-Third-party cards that work with this integration's sensors:
-
-- [jonisnet/ha-parcel-card](https://github.com/jonisnet/ha-parcel-card)
-- [klaptafel/ha-package-tracker-card](https://github.com/klaptafel/ha-package-tracker-card)
+- **Undocumented API.** This uses the same endpoints allegro.pl uses in your browser. Allegro can change them at any time. An official buyer API is not planned for 2026 ([allegro/allegro-api#5394](https://github.com/allegro/allegro-api/discussions/5394)); the integration is built so that it can switch to one.
+- **Cookie lifetime.** How long a `QXLSESSID` stays valid under this polling is still being measured. Until then this is a 0.x pre-release.
+- **Recent orders only.** Each poll reads the latest 25 orders.
+- **No delivery window, weight or history.** Allegro shows the ETA only as text.
+- **Returns you send** to a seller are not tracked.
 
 ## Debugging
 
@@ -187,35 +144,21 @@ logger:
     custom_components.allegro_orders: debug
 ```
 
+The cookie is never logged. Diagnostics redact it, waybills, order ids, pickup codes and pickup points.
+
 ## Troubleshooting
 
-- **A parcel shows `unknown`** — Allegro has not scanned it yet (their API answers `not_found` until the first scan), or the code is wrong. It will pick up automatically once scanned.
-- **A status logs "Unrecognised Allegro status"** — please [open an issue](https://github.com/uded/ha-parcels-allegro/issues/new?template=unrecognised_status.yml) with the logged line so the mapping can be extended.
-
-## Related integrations
-
-This integration is part of [**ha-parcel-integrations**](https://ha-parcel-integrations.github.io/) — a family of
-parcel-carrier integrations that all publish the same canonical parcel format,
-statuses and events.
-
-- [**Parcel Aggregator**](https://github.com/ha-parcel-integrations/ha-parcel-aggregator) rolls every installed carrier
-  up into one set of sensors.
-- Browse [the organisation](https://ha-parcel-integrations.github.io/) for the current list of supported carriers.
+- **"Unrecognised Allegro status" or "Unrecognised Allegro carrier" in the log**: please [open an issue](https://github.com/uded/ha-parcels-allegro/issues/new?template=unrecognised_status.yml) with the logged line.
+- **Setup says the cookie was rejected**: copy it again from a browser tab where you are signed in; make sure you copied `QXLSESSID` and not another cookie.
+- **"Could not reach Allegro"**: Allegro answered with an error or a bot-protection page. The integration keeps the last data and retries.
 
 ## Disclaimer
 
 This is an independent, community-built project. It is not affiliated with, endorsed by, sponsored by, or supported by Allegro, Home Assistant, or any other third party referenced in this project. Please don't contact Allegro for support with this integration.
 
-All third-party trademarks, trade names, product names, logos, and other brand assets are the property of their respective owners. References to them are solely to identify the relevant carrier or service and do not imply affiliation, sponsorship, or endorsement. Nothing in this project grants or implies any licence or right to use third-party brand assets.
+All third-party trademarks, trade names, product names, logos, and other brand assets are the property of their respective owners. References to them are solely to identify the relevant service and do not imply affiliation, sponsorship, or endorsement.
 
-This integration may rely on public, unofficial, or undocumented carrier interfaces, accessed with your own account or API key where required. These may change or be withdrawn without notice and may be subject to Allegro's terms. Data is sent only to Allegro's own services or those of its group; this project operates no servers of its own. You are responsible for ensuring that your use complies with applicable law and those terms. Use is at your own risk; see the [licence](LICENSE) for warranty limitations.
-
-This integration uses the same public tracking endpoint as the Allegro consumer website.
-
-## Contributing
-
-Pull requests and issues are welcome. Please open an issue before
-submitting a large change.
+This integration relies on undocumented Allegro interfaces, accessed with your own session. They may change or be withdrawn without notice and may be subject to Allegro's terms. Data is sent only to Allegro and, with hand-off on, to your own courier integrations; this project operates no servers of its own. You are responsible for ensuring that your use complies with applicable law and those terms. Use is at your own risk; see the [licence](LICENSE) for warranty limitations.
 
 ## License
 

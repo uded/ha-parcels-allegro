@@ -1,29 +1,8 @@
 # Allegro — still to do
 
-Generated from ha-carrier-template (`--auth credentials`). The integration runs and its tests pass,
-but it talks to a fictional API until the placeholders below are replaced.
-
-## Files carrying `TODO(carrier)` markers
-
-- [ ] `CLAUDE.md`
-- [ ] `README.md`
-- [ ] `custom_components/allegro_orders/api.py`
-- [ ] `custom_components/allegro_orders/config_flow.py`
-- [ ] `custom_components/allegro_orders/const.py`
-- [ ] `custom_components/allegro_orders/device.py`
-- [ ] `custom_components/allegro_orders/diagnostics.py`
-- [ ] `custom_components/allegro_orders/parcels.py`
-- [ ] `tests/payloads.py`
-
-## Not marked, but still needed
-
-- [ ] `tests/payloads.py` — real, redacted responses from the carrier
-- [ ] `CLAUDE.md` — the *Carrier-specific notes* section
-- [ ] `README.md` — intro, requirements, status table, disclaimer
-- [ ] `custom_components/allegro_orders/brand/icon.png` — still the placeholder
-- [ ] Install it in a real Home Assistant and track one real parcel
-      through at least two status changes
-- [ ] If you run a cross-carrier aggregator integration, register
-      `allegro_orders` with it so its events get picked up
-
-Delete this file once it is empty.
+- [ ] `custom_components/allegro_orders/brand/icon.png` is still the template placeholder
+- [ ] Install in a real Home Assistant and follow one real parcel through two status changes
+- [ ] Cookie lifetime: re-run `scripts/capture.py` with the same cookie at +24 h and +7 days (see `tests/fixtures/README.md`); this gates 1.0
+- [ ] Confirm whether DPD and ORLEN Paczka parcels sent through Allegro Delivery (17-character waybills) can be tracked by ha-dpd / ha-orlen-paczka with that number
+- [ ] Capture real `carrierId`s for DPD, InPost, ORLEN Paczka, Poczta Polska and the statuses `AVAILABLE_FOR_PICKUP`, `IN_DELIVERY`, `RETURNED`
+- [ ] Register `allegro_orders` with ha-parcel-aggregator (`KNOWN_CARRIERS`, `CARRIER_EVENT_PREFIXES`, `SHOP_DOMAINS`)
