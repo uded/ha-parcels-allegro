@@ -261,7 +261,6 @@ class AllegroCoordinator(DataUpdateCoordinator[list[dict]]):
         )
         self._fire_change_events(tracked)
         self._all_parcels = tracked
-        await self.handoff.async_process(tracked)
         self._known_state = {
             parcel["barcode"]: parcel["status"]
             for parcel in tracked
@@ -272,6 +271,8 @@ class AllegroCoordinator(DataUpdateCoordinator[list[dict]]):
             for parcel in tracked
             if parcel.get("barcode")
         }
+        # After the state above, so a hand-off problem can never replay events.
+        await self.handoff.async_process(tracked)
 
         self.last_success_time = datetime.now(UTC)
 

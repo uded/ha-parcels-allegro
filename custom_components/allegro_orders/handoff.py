@@ -10,12 +10,12 @@ Allegro One parcels and couriers without a suite integration are never handed of
 
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
 import logging
 from typing import Any
 
 from homeassistant.core import CoreState, HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
@@ -34,6 +34,8 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 STORAGE_VERSION = 1
+# A courier's track_parcel may do network I/O; never let it stall our poll.
+CALL_TIMEOUT_SECONDS = 30
 SERVICE_TRACK_PARCEL = "track_parcel"
 DOCS_CARRIERS_URL = "https://ha-parcel-integrations.github.io/carriers/"
 
@@ -97,9 +99,10 @@ class HandOff:
         await self._store.async_remove()
 
     async def _call(self, domain: str, data: dict[str, str]) -> None:
-        await self._hass.services.async_call(
-            domain, SERVICE_TRACK_PARCEL, data, blocking=True
-        )
+        async with asyncio.timeout(CALL_TIMEOUT_SECONDS):
+            await self._hass.services.async_call(
+                domain, SERVICE_TRACK_PARCEL, data, blocking=True
+            )
 
     async def _track(self, domain: str, code: str, contents: str | None) -> bool:
         """Hand a code to the courier; ``False`` when it refused it."""
@@ -114,7 +117,8 @@ class HandOff:
                     raise
                 # Not every courier's track_parcel takes contents (InPost does not).
                 await self._call(domain, data)
-        except (HomeAssistantError, vol.Invalid) as err:
+        except Exception as err:  # noqa: BLE001
+            # Another integration's bug or hang must never fail Allegro's poll.
             _LOGGER.warning(
                 "The %s integration did not accept tracking code %s (%s)."
                 " Add it there by hand if you want it tracked by %s; it stays"

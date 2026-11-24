@@ -149,6 +149,25 @@ async def test_courier_refusing_the_code_keeps_it_listed_and_warns(hass, caplog)
     assert "did not accept tracking code" in caplog.text
 
 
+async def test_a_crashing_courier_service_does_not_break_the_poll(hass, caplog):
+    calls = []
+
+    async def crash(call):
+        calls.append(call.data)
+        raise RuntimeError("courier integration bug")
+
+    hass.services.async_register("dpd", "track_parcel", crash)
+    entry, fetch = await _setup(hass, [_courier()])
+    coordinator = entry.runtime_data.coordinator
+    assert coordinator.last_update_success is True
+    assert [p["barcode"] for p in coordinator.data] == [ACTIVE_CODE]
+
+    await _refresh(hass, entry, fetch)
+    assert coordinator.last_update_success is True
+    assert len(calls) == 1  # marked failed, not retried every poll
+    assert "did not accept tracking code" in caplog.text
+
+
 async def test_hand_off_waits_until_home_assistant_started(hass):
     calls = _register(hass, "dpd")
     hass.set_state(CoreState.starting)

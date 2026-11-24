@@ -25,6 +25,20 @@ _ACCEPT = {
 }
 
 
+def isolated_session(shared: aiohttp.ClientSession) -> aiohttp.ClientSession:
+    """A session on the shared connector whose cookie jar never stores anything.
+
+    The cookie goes out as an explicit header; a QXLSESSID Allegro sets in a
+    real jar would override it on later requests (another account, a reauth).
+    The caller closes it; the connector stays with ``shared``.
+    """
+    return aiohttp.ClientSession(
+        connector=shared.connector,
+        connector_owner=False,
+        cookie_jar=aiohttp.DummyCookieJar(),
+    )
+
+
 class AllegroClient:
     """Reads the logged-in buyer's account, orders and packages."""
 
@@ -80,6 +94,10 @@ class AllegroClient:
     async def async_get_orders(self) -> list[dict[str, Any]]:
         """Return every order of the latest checkouts, each tagged with its groupId."""
         payload = await self._get(ORDERS_URL)
+        # A signed-in buyer gets viewMode REGISTERED; any other view is not the
+        # account's own order list (an expired session answering 200).
+        if payload.get("viewMode", "REGISTERED") != "REGISTERED":
+            raise AllegroAuthError(f"order view {payload.get('viewMode')}")
         groups = payload.get("orderGroups")
         if not isinstance(groups, list):
             raise AllegroApiError("unexpected body (no orderGroups)")

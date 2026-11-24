@@ -12,7 +12,7 @@ from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.start import async_at_started
 
-from .account.client import AllegroClient
+from .account.client import AllegroClient, isolated_session
 from .account.errors import AllegroApiError, AllegroAuthError
 from .const import CONF_COOKIE, DOMAIN, PLATFORMS
 from .contents import ContentsStore
@@ -38,14 +38,7 @@ type AllegroConfigEntry = ConfigEntry[AllegroData]
 
 async def async_setup_entry(hass: HomeAssistant, entry: AllegroConfigEntry) -> bool:
     """Set up Allegro from a config entry."""
-    # The cookie goes out as an explicit header; a jar that never stores
-    # anything keeps cookies Allegro sets from leaking between two accounts.
-    # The connector is reused (connector_owner=False) so this stays cheap.
-    session = aiohttp.ClientSession(
-        connector=async_get_clientsession(hass).connector,
-        connector_owner=False,
-        cookie_jar=aiohttp.DummyCookieJar(),
-    )
+    session = isolated_session(async_get_clientsession(hass))
     client = AllegroClient(entry.data[CONF_COOKIE], session)
 
     try:

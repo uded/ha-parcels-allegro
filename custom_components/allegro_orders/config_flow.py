@@ -23,7 +23,7 @@ from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import voluptuous as vol
 
-from .account.client import AllegroClient
+from .account.client import AllegroClient, isolated_session
 from .account.errors import AllegroApiError, AllegroAuthError
 from .const import (
     CONF_COOKIE,
@@ -71,13 +71,15 @@ class AllegroConfigFlow(ConfigFlow, domain=DOMAIN):
     async def _login(self, user_input: dict[str, Any], errors: dict[str, str]):
         """Return ``(cookie, login)``, or ``None`` with ``errors`` filled in."""
         cookie = _clean_cookie(user_input[CONF_COOKIE])
-        client = AllegroClient(cookie, async_get_clientsession(self.hass))
+        session = isolated_session(async_get_clientsession(self.hass))
         try:
-            return cookie, await client.async_get_login()
+            return cookie, await AllegroClient(cookie, session).async_get_login()
         except AllegroAuthError:
             errors["base"] = "invalid_auth"
         except (AllegroApiError, aiohttp.ClientError):
             errors["base"] = "cannot_connect"
+        finally:
+            await session.close()
         return None
 
     async def async_step_user(

@@ -56,6 +56,15 @@ async def test_get_orders_flattens_groups(client, aioclient_mock):
     assert len(orders) == 25
 
 
+async def test_orders_for_a_logged_out_view_raise_auth_error(client, aioclient_mock):
+    """An expired session may answer 200 with an anonymous view and no orders."""
+    aioclient_mock.get(
+        ORDERS_URL, json={"orderGroups": [], "viewMode": "ANONYMOUS"}, headers=JSON
+    )
+    with pytest.raises(AllegroAuthError):
+        await client.async_get_orders()
+
+
 async def test_get_packages(client, aioclient_mock):
     aioclient_mock.get(PACKAGES_URL, json=_fixture("packages"), headers=JSON)
     packages = await client.async_get_packages()

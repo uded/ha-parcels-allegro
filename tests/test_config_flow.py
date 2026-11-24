@@ -60,6 +60,26 @@ async def test_user_step_creates_entry(hass):
     assert result["options"][CONF_HAND_OFF] is True
 
 
+async def test_validation_never_uses_the_shared_cookie_jar(hass):
+    """A QXLSESSID Allegro set in HA's shared jar would override the pasted one."""
+    seen = []
+
+    async def get_login(self):
+        seen.append(self._session.cookie_jar)
+        return LOGIN
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    with patch(GET_LOGIN, new=get_login):
+        await hass.config_entries.flow.async_configure(
+            result["flow_id"], {CONF_COOKIE: COOKIE}
+        )
+    # The flow validates, then setup of the new entry logs in again: both isolated.
+    assert seen
+    assert all(isinstance(jar, aiohttp.DummyCookieJar) for jar in seen)
+
+
 async def test_user_step_accepts_the_whole_cookie_pair(hass):
     """Copying "QXLSESSID=value" from dev tools must work too."""
     result = await hass.config_entries.flow.async_init(
