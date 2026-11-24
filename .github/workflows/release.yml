@@ -1,43 +1,39 @@
 name: Release
 
-# The workflow_run branch filter alone is not a trust boundary: a fork pull
-# request from a branch named main also reports main here. Requiring the
-# triggering event to be a push is what keeps forks away from the release
-# token, so never drop that condition.
+# Tag-driven: push a tag like 0.0.1 (no "v", suite convention) on main. This
+# repo is outside ha-parcel-integrations, so the org's release-bot flow is not
+# available; this builds the same HACS archive and publishes the release.
 
 on:
-  workflow_run:
-    workflows: [Validate]
-    types: [completed]
-    branches: [main]
-  workflow_dispatch:
-    inputs:
-      dry_run:
-        description: Only calculate the next release; do not create or update a PR.
-        required: true
-        default: true
-        type: boolean
+  push:
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+*"
 
 permissions:
   contents: write
-  issues: read
-  pull-requests: write
-  id-token: write
-
-concurrency:
-  group: release-main
-  cancel-in-progress: false
 
 jobs:
   release:
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'push')
-    uses: ha-parcel-integrations/.github/.github/workflows/carrier-release.yml@main
-    with:
-      domain: allegro_orders
-      head-sha: ${{ github.event.workflow_run.head_sha || github.sha }}
-      dry-run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
-    secrets:
-      release-bot-token: ${{ secrets.RELEASE_BOT_TOKEN }}
+    name: Publish release
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v7
+
+      - name: 🔎 Tag matches manifest version
+        run: |
+          version=$(python3 -c "import json; print(json.load(open('custom_components/allegro_orders/manifest.json'))['version'])")
+          if [ "$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::manifest version $version does not match tag $GITHUB_REF_NAME"
+            exit 1
+          fi
+
+      # HACS unpacks the archive straight into custom_components/<domain>, so
+      # the archive holds the component's files without a directory above them.
+      - name: 📦 Build the HACS archive
+        run: git archive --format=zip --output=allegro_orders.zip HEAD:custom_components/allegro_orders
+
+      - name: 🚀 Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" allegro_orders.zip --title "$GITHUB_REF_NAME" --generate-notes
